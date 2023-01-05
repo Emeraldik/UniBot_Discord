@@ -1,6 +1,7 @@
 import requests
 import os
 import json
+from datetime import timedelta
 from datetime import datetime as dt
 from python_translator import Translator
 
@@ -57,31 +58,48 @@ def check_new_games():
 						game_image = k['url']
 
 				game_url = game['catalogNs']['mappings'][0]['pageSlug']
+				game_price = game['price']['totalPrice']['fmtPrice']['originalPrice']
+
 				game_promotions = game['promotions']['promotionalOffers']
 				upcoming_promotions = game['promotions']['upcomingPromotionalOffers']
 
 				if game_promotions and game['price']['totalPrice']['discountPrice'] == 0:
 					# Promotion is active.
+					date_start = dt.strptime(game_promotions[0]['promotionalOffers'][0]['startDate'], "%Y-%m-%dT%H:%M:%S.%fZ")
 					date_end = dt.strptime(game_promotions[0]['promotionalOffers'][0]['endDate'], "%Y-%m-%dT%H:%M:%S.%fZ")
+					date_start += timedelta(seconds=(3600*3))
+					date_end += timedelta(seconds=(3600*3))
 				elif not game_promotions and upcoming_promotions:
 					# Promotion is not active yet, but will be active soon.
+					date_start = dt.strptime(upcoming_promotions[0]['promotionalOffers'][0]['startDate'], "%Y-%m-%dT%H:%M:%S.%fZ")
 					date_end = dt.strptime(upcoming_promotions[0]['promotionalOffers'][0]['endDate'], "%Y-%m-%dT%H:%M:%S.%fZ")
+					date_start += timedelta(seconds=(3600*3))
+					date_end += timedelta(seconds=(3600*3))
 				elif game_promotions:
 					# Promotion is active.
+					date_start = dt.strptime(game_promotions[0]['promotionalOffers'][0]['startDate'], "%Y-%m-%dT%H:%M:%S.%fZ")
 					date_end = dt.strptime(game_promotions[0]['promotionalOffers'][0]['endDate'], "%Y-%m-%dT%H:%M:%S.%fZ")
+					date_start += timedelta(seconds=(3600*3))
+					date_end += timedelta(seconds=(3600*3))
 				else:
+					date_start = ''
 					date_end = ''
 
-
+				timenow = dt.utcnow() + timedelta(seconds=(3600*3))
+				
 				gm[str(game['id'])] = {
+					'id' : str(game['id']),
 					'title' : str(game['title']),
 					'description' : str(translator.translate(game['description'], 'russian', 'english')),
 					#'description' : str(game['description']),
 					'image' : str(game_image),
 					'url' : f'https://store.epicgames.com/en/p/{str(game_url)}',
+					'price' : str(game_price),
 					'date_end' : str(date_end),
-					'days_left' : str(date_end - dt.utcnow()) if date_end != '' else '',
-					'expired' : str(date_end < dt.utcnow()) if date_end != '' else None,
+					'days_left' : str(date_end - timenow) if date_end != '' else '',
+					'days_left_seconds': str((date_end - timenow).total_seconds()) if date_end != '' else '',
+					'started' : str(date_start < timenow) if date_start != '' else None,
+					'expired' : str(date_end < timenow) if date_end != '' else None,
 				}
 
 				json.dump(gm, file, ensure_ascii=False, indent=4)	

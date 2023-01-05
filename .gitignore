@@ -11,3 +11,4 @@
 *.~undo-tree
 .env
 *.json
+*.pyc
