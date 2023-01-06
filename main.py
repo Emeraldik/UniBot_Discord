@@ -84,7 +84,24 @@ async def on_ready():
 	except Exception as e:
 		print(e)
 
-@tasks.loop(seconds=30.0, reconnect=True)
+@bot.event
+async def on_guild_join(guild):
+	with open(files['channels'], 'r', encoding='utf-8') as file:
+		channels = json.load(file)
+
+	with open(files['channels'], 'w', encoding='utf-8') as file:
+		if channels.get(str(guild.id)) == None:
+			channels[str(guild.id)] = {
+				'channel': str(None),
+				'status': str(False),
+				'everyone': str(False),
+				'games': {},
+			}
+
+		json.dump(channels, file, ensure_ascii=False, indent=4)
+
+
+@tasks.loop(minutes=5.0, reconnect=True)
 async def bot_loop_delete_message():
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
@@ -96,7 +113,7 @@ async def bot_loop_delete_message():
 				if game['deleted'] != 'True':
 					timenow = dt.utcnow() + timedelta(seconds=(3600*3))
 					date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
-					if date_end > timenow:
+					if date_end < timenow:
 						channel = bot.get_channel(int(check['channel']))
 						messsage = await channel.fetch_message(game['message_id'])
 						await messsage.delete()
@@ -119,7 +136,7 @@ async def bot_loop_delete_message():
 						
 
 
-@tasks.loop(seconds=5.0, reconnect=True)
+@tasks.loop(minutes=10.0, reconnect=True)
 async def bot_loop():
 	game_informer.check_new_games()
 
