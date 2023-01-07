@@ -9,13 +9,22 @@ from python_translator import Translator
 
 file_name = 'games.json'
 
-def check_new_games():
+APIs = {
+	'not_ru': 'https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=ru-RU',
+	'ru': 'https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=ru-RU&country=RU',
+}
+
+def check_games():
+	for key, api in APIs.items():
+		check_new_games(key, api)
+
+def check_new_games(key='ru', API='https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=ru-RU&country=RU'):
 	
 	if not os.path.exists(file_name):
 		with open(file_name, 'w', encoding='utf-8') as file:
 			file.write('{}')
 
-	api = "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=ru-RU&country=RU"
+	api = str(API)
 	translator = Translator()
 	response = requests.get(api)
 
@@ -23,7 +32,6 @@ def check_new_games():
 		free_games = response.json()
 
 		games = free_games['data']['Catalog']['searchStore']['elements']
-		
 		games = list(sorted(
 	        filter(
 	            lambda g: g.get('promotions'),
@@ -100,6 +108,7 @@ def check_new_games():
 					'days_left_seconds': str((date_end - timenow).total_seconds()) if date_end != '' else '',
 					'started' : str(date_start < timenow) if date_start != '' else None,
 					'expired' : str(date_end < timenow) if date_end != '' else None,
+					'key': str(key),
 				}
 
 				json.dump(gm, file, ensure_ascii=False, indent=4)	
@@ -109,4 +118,4 @@ def check_new_games():
 		#print('Something went wrong...')
 
 if __name__ == '__main__':
-	check_new_games()
+	check_games()

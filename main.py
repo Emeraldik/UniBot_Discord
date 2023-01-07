@@ -13,10 +13,17 @@ import json
 import game_informer
 
 files = {
-	'data': 'data.json', 
+	'users': 'users.json', 
 	'channels': 'channels.json',
 	'games': 'games.json',
 }
+
+users = {
+	'303498186708746240',
+	'385446792306884609',
+}
+
+ownerID = 303498186708746240
 
 bot = commands.Bot(command_prefix='.', intents=discord.Intents.all())
 
@@ -44,17 +51,25 @@ async def on_ready():
 	for guild in bot.guilds:
 		data_members = {}
 
-		with open(files['data'], 'r', encoding='utf-8') as file:
+		with open(files['users'], 'r', encoding='utf-8') as file:
 			data = json.load(file)
 
-		with open(files['data'], 'w', encoding='utf-8') as file:
+		with open(files['users'], 'w', encoding='utf-8') as file:
 			for member in guild.members:
 				if not member.bot:
-					data_members[str(member.id)] = {
-						'name': str(member.name),
-						'avatar': str(member.display_avatar),
-						'joined': str(member.joined_at),
-					}
+					if not str(guild.id) in data:
+						data_members[str(member.id)] = {
+							'name': str(member.name),
+							'has_permissions': str(True) if ((str(member.id) in users) or (member.id == ownerID)) else str(False),  
+						}
+					elif not str(member.id) in data[str(guild.id)]:
+						data_members[str(member.id)] = {
+							'name': str(member.name),
+							'has_permissions': str(True) if ((str(member.id) in users) or (member.id == ownerID)) else str(False),  
+						}
+					else:
+						data_members = data[str(guild.id)]
+
 			data[str(guild.id)] = data_members
 
 			json.dump(data, file, ensure_ascii=False, indent=4)
@@ -66,11 +81,12 @@ async def on_ready():
 			channels = json.load(file)
 
 		with open(files['channels'], 'w', encoding='utf-8') as file:
-			if channels.get(str(guild.id)) == None:
+			if not str(guild.id) in channels:
 				channels[str(guild.id)] = {
 					'channel': str(None),
 					'status': str(False),
 					'everyone': str(False),
+					'need_delete': str(False),
 					'games': {},
 				}
 
@@ -90,21 +106,38 @@ async def on_guild_join(guild):
 		channels = json.load(file)
 
 	with open(files['channels'], 'w', encoding='utf-8') as file:
-		if channels.get(str(guild.id)) == None:
+		if not str(guild.id) in channels:
 			channels[str(guild.id)] = {
 				'channel': str(None),
 				'status': str(False),
 				'everyone': str(False),
+				'need_delete': str(False),
 				'games': {},
 			}
 
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 
+@bot.event
+async def on_member_join(member):
+	with open(files['users'], 'r', encoding='utf-8') as file:
+		data = json.load(file)
+
+	with open(files['users'], 'w', encoding='utf-8') as file:
+		data_members = data[str(member.guild.id)]
+		if not str(member.id) in data_members:
+			data_members[str(member.id)] = {
+				'name': str(member.name),
+				'has_permissions': str(True) if ((str(member.id) in users) or (member.id == ownerID)) else str(False),  
+			}
+		json.dump(data, file, ensure_ascii=False, indent=4)
 
 @tasks.loop(minutes=5.0, reconnect=True)
 async def bot_loop_delete_message():
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
+
+	with open(files['games'], 'r', encoding='utf-8') as file:
+		games = json.load(file)
 
 	for guild in bot.guilds:
 		check = channels[str(guild.id)]
@@ -115,8 +148,41 @@ async def bot_loop_delete_message():
 					date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
 					if date_end < timenow:
 						channel = bot.get_channel(int(check['channel']))
-						messsage = await channel.fetch_message(game['message_id'])
-						await messsage.delete()
+						try:
+							message = await channel.fetch_message(game['message_id'])
+						except Exception as e:
+							pass
+						else:
+							if check['need_delete'] == 'True':
+								await message.delete()
+							else:
+								GM = games[key]
+
+								embed = discord.Embed()
+								embed.title = GM['title']
+								embed.colour = discord.Color.green()
+								embed.timestamp = dt.strptime(GM['date_end'], "%Y-%m-%d %H:%M:%S")
+								price = GM['price']
+								embed.add_field(name = f'Цена игры ({price})', value = GM['description'], inline = False)
+								embed.set_image(url=GM['image'])
+								embed.set_thumbnail(url='https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.icon-icons.com%2Ficons2%2F2429%2FPNG%2F512%2Fepic_games_logo_icon_147294.png&f=1&nofb=1&ipt=fcb317278eedd075465f00e4f3a6c99f2a970dc635bd138a317b027b936d260e&ipo=images')
+								embed.set_footer(text='Акция закончилась')
+								
+								label = '(Не для RU аккаунта)' if GM['key'] == 'not_ru' else ''
+
+								button = discord.ui.View()
+								button.add_item(discord.ui.Button(
+									label = f'Ссылка на раздачу {label}',
+									style = discord.ButtonStyle.success,
+									url = GM['url'],
+									emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+									disabled = True,
+								))
+
+								await message.edit(
+									embed = embed,
+									view = button,
+								)
 
 						check['games'][str(key)] = {
 							'date_end': str(game['date_end']),
@@ -129,16 +195,15 @@ async def bot_loop_delete_message():
 								'channel': str(check['channel']),
 								'status': str(check['status']),
 								'everyone': str(check['everyone']),
+								'need_delete': str(check['need_delete']),
 								'games': check['games'],
 							}
 
 							json.dump(channels, file, ensure_ascii=False, indent=4)
 						
-
-
 @tasks.loop(minutes=10.0, reconnect=True)
 async def bot_loop():
-	game_informer.check_new_games()
+	game_informer.check_games()
 
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
@@ -163,15 +228,17 @@ async def bot_loop():
 						embed.set_thumbnail(url='https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.icon-icons.com%2Ficons2%2F2429%2FPNG%2F512%2Fepic_games_logo_icon_147294.png&f=1&nofb=1&ipt=fcb317278eedd075465f00e4f3a6c99f2a970dc635bd138a317b027b936d260e&ipo=images')
 						embed.set_footer(text='Акция заканчивается')
 						
+						label = '(Не для RU аккаунта)' if game['key'] == 'not_ru' else ''
+
 						button = discord.ui.View()
 						button.add_item(discord.ui.Button(
-							label = 'Ссылка на раздачу',
+							label = f'Ссылка на раздачу {label}',
 							style = discord.ButtonStyle.success,
 							url = game['url'],
 							emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
 							disabled = False,
 						))
-						content = '@everyone' if channels[str(guild.id)]['everyone'] == 'True' else '@here'
+						content = '@everyone' if channels[str(guild.id)]['everyone'] == 'True' else ''
 						
 						timenow = dt.utcnow() + timedelta(seconds=(3600*3))
 						date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
@@ -199,10 +266,23 @@ async def bot_loop():
 								'channel': str(channels[str(guild.id)]['channel']),
 								'status': str(channels[str(guild.id)]['status']),
 								'everyone': str(channels[str(guild.id)]['everyone']),
+								'need_delete': str(channels[str(guild.id)]['need_delete']),
 								'games': games,
 							}
 
 							json.dump(channels, file, ensure_ascii=False, indent=4)
+
+def is_owner():
+	def predicate(interaction: discord.Interaction) -> bool:
+		return interaction.user.id == ownerID
+	return app_commands.check(predicate)
+
+def in_list_users():
+	def predicate(interaction: discord.Interaction) -> bool:
+		with open(files['users'], 'r', encoding='utf-8') as file:
+			data = json.load(file)
+		return True if data[str(interaction.guild_id)][str(interaction.user.id)]['has_permissions'] == 'True' else False
+	return app_commands.check(predicate)
 
 # class Test_Button(discord.ui.View):
 # 	def __init__(self):
@@ -211,9 +291,8 @@ async def bot_loop():
 # 	# async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
 # 	# 	await interaction.response.send_message(content = 'Hello World')
 
-
 @bot.tree.command(name='test_script')
-@app_commands.checks.has_permissions(administrator=True)
+@is_owner()
 async def test_script(interaction: discord.Interaction):
 	with open(files['games'], 'r', encoding='utf-8') as file:
 		games = json.load(file)
@@ -232,7 +311,7 @@ async def test_script(interaction: discord.Interaction):
 			embed.add_field(name = f'Цена игры ({price})', value = game['description'], inline = False)
 			embed.set_image(url=game['image'])
 			embed.set_thumbnail(url='https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.icon-icons.com%2Ficons2%2F2429%2FPNG%2F512%2Fepic_games_logo_icon_147294.png&f=1&nofb=1&ipt=fcb317278eedd075465f00e4f3a6c99f2a970dc635bd138a317b027b936d260e&ipo=images')
-			embed.set_footer(text='Акция заканчивается')
+			embed.set_footer(text='Акция закончилась')
 			
 			button = discord.ui.View()
 			button.add_item(discord.ui.Button(
@@ -243,7 +322,8 @@ async def test_script(interaction: discord.Interaction):
 				disabled = False,
 			))
 
-			await interaction.response.send_message(content='@everyone', 
+			await interaction.response.send_message(
+				content='', 
 				embed = embed, 
 				allowed_mentions = discord.AllowedMentions.all(), 
 				view = button,
@@ -272,6 +352,36 @@ async def test_script(interaction: discord.Interaction):
 			# 	allowed_mentions = discord.AllowedMentions.all(), 
 			# 	view = button,
 			# )
+
+@bot.tree.command(name='send_to_channel')
+@in_list_users()
+async def send_to_channel(interaction: discord.Interaction, user: discord.Member):
+	if user.voice == None:
+		await interaction.response.send_message(content=f'Sorry, {user.name} must be in the voice channel', ephemeral=True)
+		return
+
+	view = discord.ui.View()
+	select = discord.ui.Select(
+		options = [discord.SelectOption(
+			label = voice.name,
+			description = voice.id, 
+		) for voice in interaction.guild.voice_channels
+		],
+		placeholder = 'Choose the channel or click \'Cancel\'',
+	)
+
+	view.add_item(select)
+	
+	# button = discord.ui.Button(
+	# 	label = f'Отменить',
+	# 	style = discord.ButtonStyle.danger,
+	# )
+	# view.add_item(button)
+
+	await interaction.response.send_message(
+		view = view,
+		ephemeral = True,
+	)
 
 # @bot_loop.before_loop
 # async def wait__when_ready():
@@ -302,7 +412,7 @@ async def test_script(interaction: discord.Interaction):
 # 		print('Something went wrong...')
 
 @bot.tree.command(name='set_channel')
-@app_commands.describe(channel = 'What\'s new channel?')
+@app_commands.describe(channel = 'Set up a channel where new messages from the bot will be sent')
 @app_commands.checks.has_permissions(manage_channels=True)
 async def set_channel(interaction: discord.Interaction, channel: discord.TextChannel):
 	with open(files['channels'], 'r', encoding='utf-8') as file:
@@ -313,6 +423,7 @@ async def set_channel(interaction: discord.Interaction, channel: discord.TextCha
 			'channel': str(channel.id),
 			'status': str(channels[str(interaction.guild_id)]['status']),
 			'everyone': str(channels[str(interaction.guild_id)]['everyone']),
+			'need_delete': str(channels[str(interaction.guild_id)]['need_delete']),
 			'games': channels[str(interaction.guild_id)]['games'],
 		}
 
@@ -320,28 +431,51 @@ async def set_channel(interaction: discord.Interaction, channel: discord.TextCha
 
 	await interaction.response.send_message(f'Thanks {interaction.user.mention}. New channel is setup!', ephemeral=True)
 
-@bot.tree.command(name='change_everyone')
+@bot.tree.command(name='set_everyone')
+@app_commands.describe(boolean = 'True - message will send with @everyone | False : without @everyone')
 @app_commands.checks.has_permissions(manage_channels=True)
-async def change_everyone(interaction: discord.Interaction):
+async def set_everyone(interaction: discord.Interaction, boolean: bool):
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
-
-	everyone = str(channels[str(interaction.guild_id)]['everyone'])
 
 	with open(files['channels'], 'w', encoding='utf-8') as file:
 		channels[str(interaction.guild_id)] = {
 			'channel': str(channels[str(interaction.guild_id)]['channel']),
 			'status': str(channels[str(interaction.guild_id)]['status']),
-			'everyone': str(True) if everyone == 'False' else str(False),
+			'everyone': str(boolean),
+			'need_delete': str(channels[str(interaction.guild_id)]['need_delete']),
 			'games': channels[str(interaction.guild_id)]['games'],
 		}
 
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 
-	if everyone == 'True':
-		await interaction.response.send_message(f'Thanks {interaction.user.mention}. Everyone is OFF now!', ephemeral=True)
-	else:
+	if str(boolean) == 'True':
 		await interaction.response.send_message(f'Thanks {interaction.user.mention}. Everyone is ON now!', ephemeral=True)
+	else:
+		await interaction.response.send_message(f'Thanks {interaction.user.mention}. Everyone is OFF now!', ephemeral=True)
+
+@bot.tree.command(name='need_delete')
+@app_commands.describe(boolean = 'True - messages will be deleted when it expires | False : messages will be changed when it expires')
+@app_commands.checks.has_permissions(manage_channels=True)
+async def need_delete(interaction: discord.Interaction, boolean: bool):
+	with open(files['channels'], 'r', encoding='utf-8') as file:
+		channels = json.load(file)
+
+	with open(files['channels'], 'w', encoding='utf-8') as file:
+		channels[str(interaction.guild_id)] = {
+			'channel': str(channels[str(interaction.guild_id)]['channel']),
+			'status': str(channels[str(interaction.guild_id)]['status']),
+			'everyone': str(channels[str(interaction.guild_id)]['everyone']),
+			'need_delete': str(boolean),
+			'games': channels[str(interaction.guild_id)]['games'],
+		}
+
+		json.dump(channels, file, ensure_ascii=False, indent=4)
+
+	if str(boolean) == 'True':
+		await interaction.response.send_message(f'Thanks {interaction.user.mention}. The messages will be deleted when it expires!', ephemeral=True)
+	else:
+		await interaction.response.send_message(f'Thanks {interaction.user.mention}. The messages will be changed when it expires!', ephemeral=True)
 
 @bot.tree.command(name='start_bot')
 @app_commands.checks.has_permissions(manage_channels=True)
@@ -362,13 +496,13 @@ async def start_bot(interaction: discord.Interaction):
 			'channel': str(channels[str(interaction.guild_id)]['channel']),
 			'status': str(True),
 			'everyone': str(channels[str(interaction.guild_id)]['everyone']),
+			'need_delete': str(channels[str(interaction.guild_id)]['need_delete']),
 			'games': channels[str(interaction.guild_id)]['games'],
 		}
 
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 
 	await interaction.response.send_message(f'All ready {interaction.user.mention}! Bot was started!', ephemeral=True)
-
 
 @bot.tree.command(name='stop_bot')
 @app_commands.checks.has_permissions(manage_channels=True)
@@ -385,12 +519,31 @@ async def stop_bot(interaction: discord.Interaction):
 			'channel': str(channels[str(interaction.guild_id)]['channel']),
 			'status': str(False),
 			'everyone': str(channels[str(interaction.guild_id)]['everyone']),
+			'need_delete': str(channels[str(interaction.guild_id)]['need_delete']),
 			'games': channels[str(interaction.guild_id)]['games'],
 		}
 
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 
 	await interaction.response.send_message(f'All ready {interaction.user.mention}! Bot was stoped!', ephemeral=True)
+
+@bot.tree.command(name='set_userperm_list')
+@is_owner()
+async def set_userperm_list(interaction: discord.Interaction, user: discord.Member, boolean: bool):
+	with open(files['users'], 'r', encoding='utf-8') as file:
+		data = json.load(file)
+
+	with open(files['users'], 'w', encoding='utf-8') as file:
+		check = data[str(interaction.guild_id)]
+		check[str(user.id)] = {
+			'name': str(check[str(user.id)]['name']),
+			'has_permissions': str(boolean),
+		}
+		data[str(interaction.guild_id)] = check
+
+		json.dump(data, file, ensure_ascii=False, indent=4)
+
+	await interaction.response.send_message(content = f'All ready! {interaction.user.mention}! {user.name} now has a new status : {boolean}.', ephemeral = True)
 
 @set_channel.error
 async def set_channel_error(interaction: discord.Interaction, error):
@@ -407,14 +560,29 @@ async def stop_bot_error(interaction: discord.Interaction, error):
 	if isinstance(error, app_commands.errors.MissingPermissions):
 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
 
-@change_everyone.error
-async def change_everyone_error(interaction: discord.Interaction, error):
+@set_everyone.error
+async def set_everyone_error(interaction: discord.Interaction, error):
+	if isinstance(error, app_commands.errors.MissingPermissions):
+		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
+
+@need_delete.error
+async def need_delete_error(interaction: discord.Interaction, error):
 	if isinstance(error, app_commands.errors.MissingPermissions):
 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
 
 @test_script.error
 async def test_script_error(interaction: discord.Interaction, error):
 	if isinstance(error, app_commands.errors.MissingPermissions):
+		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
+
+@set_userperm_list.error
+async def set_userperm_list_error(interaction: discord.Interaction, error):
+	if isinstance(error, app_commands.errors.CheckFailure):
+		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
+
+@send_to_channel.error
+async def send_to_channel_error(interaction: discord.Interaction, error):
+	if isinstance(error, app_commands.errors.CheckFailure):
 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
 
 load_dotenv(find_dotenv())
