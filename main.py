@@ -371,8 +371,27 @@ class _SelectChannel(discord.ui.Select):
 
 		channel = bot.get_channel(int(self.values[0]))
 		await self.user.move_to(channel)
+		await interaction.response.send_message(content = f'{self.user.name} will be sent to channel with {self.values[0]} id.', ephemeral = True)
 
-		await interaction.response.send_message(content = f'{self.user.name} will be send to channel with {self.values[0]} id.', ephemeral = True)
+class _ButtonChannels(discord.ui.Button):
+	def __init__(self, channels):
+		self.channels = channels
+		super().__init__(
+			style = discord.ButtonStyle.success,
+			label = 'Check members in all channel',
+			emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+		)
+
+	async def callback(self, interaction: discord.Interaction):
+		embed = discord.Embed()
+		for channel in self.channels:
+			members = [str(m.name) for m in channel.members]
+			embed.add_field(
+				name = channel.name,
+				value = ', '.join(members) if len(members) != 0 else 'Nobody',
+				inline = False,
+			)
+		await interaction.response.send_message(embed = embed, ephemeral = True)
 
 class _SelectView(discord.ui.View):
 	def __init__(self, channels, user):
@@ -380,13 +399,14 @@ class _SelectView(discord.ui.View):
 		self.user = user
 		super().__init__()
 		self.add_item(_SelectChannel(self.channels, self.user))
+		self.add_item(_ButtonChannels(self.channels))
 
 @bot.tree.command(name='send_to_channel')
 @in_list_users()
 async def send_to_channel(interaction: discord.Interaction, user: discord.Member):
-	if user.voice == None:
-		await interaction.response.send_message(content=f'Sorry, {user.name} must be in the voice channel', ephemeral=True)
-		return
+	# if user.voice == None:
+	# 	await interaction.response.send_message(content=f'Sorry, {user.name} must be in the voice channel', ephemeral=True)
+	# 	return
 
 	view = _SelectView(interaction.guild.voice_channels, user)
 	await interaction.response.send_message(
