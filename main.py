@@ -74,9 +74,6 @@ async def on_ready():
 
 			json.dump(data, file, ensure_ascii=False, indent=4)
 		
-			#print(f'{member.name} {member.id} {member.joined_at}')
-			
-
 		with open(files['channels'], 'r', encoding='utf-8') as file:
 			channels = json.load(file)
 
@@ -99,6 +96,11 @@ async def on_ready():
 		print(f'All is right. Synced {len(synced)} commands')
 	except Exception as e:
 		print(e)
+
+	await bot.change_presence(activity = discord.Activity(
+		type = discord.ActivityType.watching,
+		name = f'{len(bot.guilds)} servers ({len(bot.users)} users)',
+	))
 
 @bot.event
 async def on_guild_join(guild):
@@ -284,13 +286,6 @@ def in_list_users():
 		return True if data[str(interaction.guild_id)][str(interaction.user.id)]['has_permissions'] == 'True' else False
 	return app_commands.check(predicate)
 
-# class Test_Button(discord.ui.View):
-# 	def __init__(self):
-# 		super().__init__(timeout=None)
-# 	# @discord.ui.button(label="Link to the Game", style=discord.ButtonStyle.link, url = 'https://store.epicgames.com/en/p/eximius-seize-the-frontline')
-# 	# async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-# 	# 	await interaction.response.send_message(content = 'Hello World')
-
 @bot.tree.command(name='test_script')
 @is_owner()
 async def test_script(interaction: discord.Interaction):
@@ -353,6 +348,39 @@ async def test_script(interaction: discord.Interaction):
 			# 	view = button,
 			# )
 
+class _SelectChannel(discord.ui.Select):
+	def __init__(self, channels, user):
+		self.channels = channels
+		self.user = user
+		options = [
+			discord.SelectOption(
+				label = voice.name,
+				#description = voice.members,
+				value = str(voice.id)
+			) for voice in self.channels
+		]
+		super().__init__(
+			placeholder = f'Choose the channel, where you want send {self.user.name}',
+			options = options,
+		)
+
+	async def callback(self, interaction: discord.Interaction):
+		if self.user.voice == None:
+			await interaction.response.send_message(content=f'Sorry, {self.user.name} must be in the voice channel', ephemeral=True)
+			return
+
+		channel = bot.get_channel(int(self.values[0]))
+		await self.user.move_to(channel)
+
+		await interaction.response.send_message(content = f'{self.user.name} will be send to channel with {self.values[0]} id.', ephemeral = True)
+
+class _SelectView(discord.ui.View):
+	def __init__(self, channels, user):
+		self.channels = channels
+		self.user = user
+		super().__init__()
+		self.add_item(_SelectChannel(self.channels, self.user))
+
 @bot.tree.command(name='send_to_channel')
 @in_list_users()
 async def send_to_channel(interaction: discord.Interaction, user: discord.Member):
@@ -360,56 +388,11 @@ async def send_to_channel(interaction: discord.Interaction, user: discord.Member
 		await interaction.response.send_message(content=f'Sorry, {user.name} must be in the voice channel', ephemeral=True)
 		return
 
-	view = discord.ui.View()
-	select = discord.ui.Select(
-		options = [discord.SelectOption(
-			label = voice.name,
-			description = voice.id, 
-		) for voice in interaction.guild.voice_channels
-		],
-		placeholder = 'Choose the channel or click \'Cancel\'',
-	)
-
-	view.add_item(select)
-	
-	# button = discord.ui.Button(
-	# 	label = f'Отменить',
-	# 	style = discord.ButtonStyle.danger,
-	# )
-	# view.add_item(button)
-
+	view = _SelectView(interaction.guild.voice_channels, user)
 	await interaction.response.send_message(
-		view = view,
-		ephemeral = True,
+		view = view, 
+		ephemeral=True,
 	)
-
-# @bot_loop.before_loop
-# async def wait__when_ready():
-#     await bot.wait_until_ready()
-
-# @bot.event
-# async def on_message(message):
-# 	await bot.process_commands(message)
-
-# 	if message.author == bot.user: 
-# 		return
-
-	#print(f'New message by {message.author.name} : {message}')
-	# await message.channel.typing()
-	# await sleep(1)
-	# await message.reply(content = f'Thanks for you message, {message.author.mention}', mention_author=False)
-
-# @bot.command()
-# @commands.has_permissions(manage_channels=True)
-# async def set_channel(ctx, channel: discord.TextChannel):
-	
-# 	print(ctx.channel.name)
-# 	await ctx.send('New channel is setup!')
-
-# @set_channel.error
-# async def error(ctx, error):
-# 	if isinstance(error, commands.MissingRequiredArgument):
-# 		print('Something went wrong...')
 
 @bot.tree.command(name='set_channel')
 @app_commands.describe(channel = 'Set up a channel where new messages from the bot will be sent')
@@ -584,6 +567,7 @@ async def set_userperm_list_error(interaction: discord.Interaction, error):
 async def send_to_channel_error(interaction: discord.Interaction, error):
 	if isinstance(error, app_commands.errors.CheckFailure):
 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
+
 
 load_dotenv(find_dotenv())
 
