@@ -6,7 +6,7 @@ from discord import app_commands
 from dotenv import load_dotenv, find_dotenv
 from datetime import datetime as dt
 from datetime import timedelta
-from asyncio import sleep
+#from asyncio import sleep
 import os
 import json
 
@@ -216,7 +216,6 @@ async def bot_loop_delete_message():
 @tasks.loop(minutes=10.0, reconnect=True)
 async def bot_loop():
 	game_informer.check_games()
-
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
 
@@ -230,10 +229,12 @@ async def bot_loop():
 			for key, game in games.items():
 				if key not in check['games']:
 					if game['expired'] == 'False' and game['started'] == 'True':
+						date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
+						
 						embed = discord.Embed()
 						embed.title = game['title']
 						embed.colour = discord.Color.green()
-						embed.timestamp = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
+						embed.timestamp = date_end
 						price = game['price']
 						embed.add_field(name = f'Цена игры ({price})', value = game['description'], inline = False)
 						embed.set_image(url=game['image'])
@@ -250,21 +251,14 @@ async def bot_loop():
 							emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
 							disabled = False,
 						))
-						content = '@everyone' if channels[str(guild.id)]['everyone'] == 'True' else ''
+						content = '@everyone' if check['everyone'] == 'True' else ''
 						
-						timenow = dt.utcnow() + timedelta(seconds=(3600*3))
-						date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
-						time_delta = (date_end - timenow).total_seconds()
-
 						message = await channel.send(
 							content = content, 
 							embed = embed, 
 							allowed_mentions = discord.AllowedMentions.all(), 
 							view = button,
-							#delete_after = 60.0,
 						)
-
-						#print(message)
 
 						games = channels[str(guild.id)]['games']
 						games[str(game['id'])] = {
@@ -275,10 +269,10 @@ async def bot_loop():
 
 						with open(files['channels'], 'w', encoding='utf-8') as file:
 							channels[str(guild.id)] = {
-								'channel': str(channels[str(guild.id)]['channel']),
-								'status': str(channels[str(guild.id)]['status']),
-								'everyone': str(channels[str(guild.id)]['everyone']),
-								'need_delete': str(channels[str(guild.id)]['need_delete']),
+								'channel': str(check['channel']),
+								'status': str(check['status']),
+								'everyone': str(check['everyone']),
+								'need_delete': str(check['need_delete']),
 								'games': games,
 							}
 
@@ -312,7 +306,7 @@ async def test_script(interaction: discord.Interaction):
 			embed.title = game['title']
 			embed.colour = discord.Color.green()
 			#embed.url = 'https://store.epicgames.com/en/p/eximius-seize-the-frontline'
-			embed.timestamp = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
+			embed.timestamp = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S") - timedelta(seconds=(3600*3))
 			price = game['price']
 			embed.add_field(name = f'Цена игры ({price})', value = game['description'], inline = False)
 			embed.set_image(url=game['image'])

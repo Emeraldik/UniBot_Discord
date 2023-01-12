@@ -5,8 +5,6 @@ from datetime import timedelta
 from datetime import datetime as dt
 from python_translator import Translator
 
-#import translators.server as tss
-
 file_name = 'games.json'
 
 APIs = {
@@ -40,15 +38,6 @@ def check_new_games(key='ru', API='https://store-site-backend-static.ak.epicgame
 	        key=lambda g: g['title']
 	    ))
 		for game in games:
-			# print(game['title'], '\n')
-			# if len(game['promotions']['promotionalOffers']) != 0 and len(game['promotions']['upcomingPromotionalOffers']) == 0:
-			# 	print(game['promotions']['promotionalOffers'][0]['promotionalOffers'][0]['startDate'])
-			# 	print(game['promotions']['promotionalOffers'][0]['promotionalOffers'][0]['endDate'])
-			# 	timeend = game['promotions']['promotionalOffers'][0]['promotionalOffers'][0]['endDate']
-			# 	timeend = dt.strptime(timeend, "%Y-%m-%dT%H:%M:%S.%fZ")
-			# 	#2023-01-05T16:00:00.000Z
-			# 	print(dt.utcnow())
-			# 	print(timeend - dt.utcnow())
 			try:
 				with open(file_name, 'r', encoding='utf-8') as file:
 					gm = json.load(file)
@@ -94,12 +83,10 @@ def check_new_games(key='ru', API='https://store-site-backend-static.ak.epicgame
 					date_end = ''
 
 				timenow = dt.utcnow() + timedelta(seconds=(3600*3))
-				
 				gm[str(game['id'])] = {
 					'id' : str(game['id']),
 					'title' : str(game['title']),
 					'description' : str(translator.translate(game['description'], 'russian', 'english')),
-					#'description' : str(game['description']),
 					'image' : str(game_image),
 					'url' : f'https://store.epicgames.com/en/p/{str(game_url)}',
 					'price' : str(game_price),
@@ -116,6 +103,31 @@ def check_new_games(key='ru', API='https://store-site-backend-static.ak.epicgame
 	else:
 		pass
 		#print('Something went wrong...')
+
+	with open(file_name, 'r', encoding='utf-8') as file:
+		gm = json.load(file)
+
+	with open(file_name, 'w', encoding='utf-8') as file:
+		for key, game in gm.items():
+			timenow = dt.utcnow() + timedelta(seconds=(3600*3))
+			date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
+			gm[key] = {
+				'id' : str(game['id']),
+				'title' : str(game['title']),
+				'description' : str(game['description']),
+				#'description' : str(game['description']),
+				'image' : str(game['image']),
+				'url' : str(game['url']),
+				'price' : str(game['price']),
+				'date_end' : str(game['date_end']),
+				'days_left' : str(date_end - timenow) if date_end != '' else '',
+				'days_left_seconds': str((date_end - timenow).total_seconds()) if date_end != '' else '',
+				'started' : str(game['started']),
+				'expired' : str(date_end < timenow) if date_end != '' else None,
+				'key': str(game['key']),
+			}
+
+		json.dump(gm, file, ensure_ascii=False, indent=4)	
 
 if __name__ == '__main__':
 	check_games()
