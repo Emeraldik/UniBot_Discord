@@ -143,7 +143,7 @@ async def on_member_join(member):
 		name = f'{len(bot.guilds)} servers ({len(bot.users)} users)',
 	))
 
-@tasks.loop(seconds=30.0, reconnect=True)
+@tasks.loop(minutes=10.0, reconnect=True)
 async def bot_loop_delete_message():
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
@@ -215,7 +215,7 @@ async def bot_loop_delete_message():
 
 							json.dump(channels, file, ensure_ascii=False, indent=4)
 						
-@tasks.loop(seconds=15.0, reconnect=True)
+@tasks.loop(minutes=5.0, reconnect=True)
 async def bot_loop():
 	game_informer.check_games()
 
@@ -301,6 +301,20 @@ def in_list_users():
 		with open(files['users'], 'r', encoding='utf-8') as file:
 			data = json.load(file)
 		return True if data[str(interaction.guild_id)][str(interaction.user.id)]['has_permissions'] == 'True' else False
+	return app_commands.check(predicate)
+
+def has_channel_permissions():
+	def predicate(interaction: discord.Interaction) -> bool:
+		if interaction.user.id == ownerID:
+			return True
+
+		if interaction.user.guild_permissions.manage_channels:
+			return True
+
+		with open(files['users'], 'r', encoding='utf-8') as file:
+			data = json.load(file)
+		return True if data[str(interaction.guild_id)][str(interaction.user.id)]['has_permissions'] == 'True' else False
+		
 	return app_commands.check(predicate)
 
 @bot.tree.command(name='test_script')
@@ -605,8 +619,8 @@ class _SettingsMenu(discord.ui.View):
 		)
 
 @bot.tree.command(name='settings')
-@app_commands.checks.has_permissions(manage_channels=True)
 @app_commands.guild_only()
+@has_channel_permissions()
 async def settings(interaction: discord.Interaction):
 	view = _SettingsMenu()
 	embed = await embedSettignsMenu(interaction)
@@ -714,8 +728,8 @@ class _ChangeMessageModal(discord.ui.Modal):
 		)
 
 @bot.tree.command(name='fix_message')
-@app_commands.checks.has_permissions(manage_channels=True)
 @app_commands.guild_only()
+@has_channel_permissions()
 async def fix_message(interaction: discord.Interaction):
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
@@ -1000,7 +1014,7 @@ async def give_permissions(interaction: discord.Interaction, user: discord.Membe
 
 @test_script.error
 async def test_script_error(interaction: discord.Interaction, error):
-	if isinstance(error, app_commands.errors.MissingPermissions):
+	if isinstance(error, app_commands.errors.CheckFailure):
 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
 
 @give_permissions.error
@@ -1020,12 +1034,12 @@ async def send_to_channel_error(interaction: discord.Interaction, error):
 
 @settings.error
 async def settings_error(interaction: discord.Interaction, error):
-	if isinstance(error, app_commands.errors.MissingPermissions):
+	if isinstance(error, app_commands.errors.CheckFailure):
 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
 
 @fix_message.error
 async def fix_message_error(interaction: discord.Interaction, error):
-	if isinstance(error, app_commands.errors.MissingPermissions):
+	if isinstance(error, app_commands.errors.CheckFailure):
 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
 
 
