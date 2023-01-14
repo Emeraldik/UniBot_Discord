@@ -6,7 +6,7 @@ from discord import app_commands
 from dotenv import load_dotenv, find_dotenv
 from datetime import datetime as dt
 from datetime import timedelta
-#from asyncio import sleep
+
 import os
 import json
 
@@ -143,7 +143,7 @@ async def on_member_join(member):
 		name = f'{len(bot.guilds)} servers ({len(bot.users)} users)',
 	))
 
-@tasks.loop(minutes=5.0, reconnect=True)
+@tasks.loop(seconds=30.0, reconnect=True)
 async def bot_loop_delete_message():
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
@@ -199,7 +199,9 @@ async def bot_loop_delete_message():
 						check['games'][str(key)] = {
 							'date_end': str(game['date_end']),
 							'message_id': str(game['message_id']),
+							'channel_id': str(game['channel_id']),
 							'deleted': str(True),
+							'game_info': game['game_info'],
 						}
 
 						with open(files['channels'], 'w', encoding='utf-8') as file:
@@ -213,9 +215,10 @@ async def bot_loop_delete_message():
 
 							json.dump(channels, file, ensure_ascii=False, indent=4)
 						
-@tasks.loop(minutes=10.0, reconnect=True)
+@tasks.loop(seconds=15.0, reconnect=True)
 async def bot_loop():
 	game_informer.check_games()
+
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
 
@@ -260,11 +263,21 @@ async def bot_loop():
 							view = button,
 						)
 
+						game_json = {
+		                    'title': str(game['title']),
+		                    'description': str(game['description']),
+		                    'url': str(game['url']),
+		                    'price': str(game['price']),
+		                    'key': str(game['key']),
+						}
+
 						games = channels[str(guild.id)]['games']
 						games[str(game['id'])] = {
 							'date_end': str(date_end),
 							'message_id': str(message.id),
+							'channel_id': str(check['channel']),
 							'deleted': str(False),
+							'game_info': game_json,
 						}
 
 						with open(files['channels'], 'w', encoding='utf-8') as file:
@@ -602,6 +615,163 @@ async def settings(interaction: discord.Interaction):
 	view.add_item(_StatusSettingsButton(view, interaction))
 	await interaction.response.send_message(embed = embed, view = view, ephemeral = True)
 
+class _ChangeMessageModal(discord.ui.Modal):
+	def __init__(self, game, embed, message, game_id):
+		self.game = game
+		self.embed = embed
+		self.message = message
+		self.game_id = game_id
+		super().__init__(title = 'Message Editor')
+
+	async def on_submit(self, interaction: discord.Interaction):
+		options = self.game
+		for _input in self.children:
+			if str(self.game[_input.custom_id]) != str(_input.value):
+				if _input.custom_id == 'key':
+					if _input.value != 'ru':
+						if _input.value != 'not_ru':
+							await interaction.response.send_message(content = 'You change \'key\', but it\'s  not \'ru\' or \'not_ru\'', ephemeral = True)
+							return
+				options[str(_input.custom_id)] = str(_input.value)
+		
+		self.embed.title = options['title']
+		price = options['price']
+		self.embed.set_field_at(0, name = f'Цена игры ({price})', value = options['description'], inline = False)
+
+		label = '(Не для RU аккаунта)' if options['key'] == 'not_ru' else ''
+
+		view = discord.ui.View()
+		view.add_item(discord.ui.Button(
+			label = f'Ссылка на раздачу {label}',
+			style = discord.ButtonStyle.success,
+			url = options['url'],
+			emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+			disabled = False,
+		))
+
+		button_confirm = discord.ui.Button(
+			label = f'Apply changes',
+			style = discord.ButtonStyle.success,
+			disabled = False,
+		)
+		async def button_confirm_callback(interaction: discord.Interaction):
+			with open(files['channels'], 'r', encoding='utf-8') as file:
+				channels = json.load(file)
+
+			games = channels[str(interaction.guild.id)]['games']
+			games[str(self.game_id)]['game_info'] = options
+
+			with open(files['channels'], 'w', encoding='utf-8') as file:
+				channels[str(interaction.guild.id)] = {
+					'channel': channels[str(interaction.guild.id)]['channel'],
+					'status': channels[str(interaction.guild.id)]['status'],
+					'everyone': channels[str(interaction.guild.id)]['everyone'],
+					'need_delete': channels[str(interaction.guild.id)]['need_delete'],
+					'games': games,
+				}
+
+				json.dump(channels, file, ensure_ascii=False, indent=4)
+
+			view.clear_items()
+			view.add_item(discord.ui.Button(
+				label = f'Ссылка на раздачу {label}',
+				style = discord.ButtonStyle.success,
+				url = options['url'],
+				emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+				disabled = False,
+			))
+
+			await self.message.edit(embed = self.embed, view = view)
+			await interaction.response.edit_message(
+				content = 'Message was edited',
+				view = None,
+				embed = None
+			)
+
+		button_confirm.callback = button_confirm_callback
+
+		button_cancel = discord.ui.Button(
+			label = f'Discard changes',
+			style = discord.ButtonStyle.danger,
+			disabled = False,
+		)
+
+		async def button_cancel_callback(interaction: discord.Interaction):
+			await interaction.response.edit_message(
+				content = 'Message edit was discard',
+				view = None,
+				embed = None
+			)
+		button_cancel.callback = button_cancel_callback
+
+		view.add_item(button_confirm)
+		view.add_item(button_cancel)
+
+		await interaction.response.edit_message(
+			content = 'How it will be view',
+			view = view,
+			embed = self.embed,
+		)
+
+@bot.tree.command(name='fix_message')
+@app_commands.checks.has_permissions(manage_channels=True)
+@app_commands.guild_only()
+async def fix_message(interaction: discord.Interaction):
+	with open(files['channels'], 'r', encoding='utf-8') as file:
+		channels = json.load(file)
+
+	def select_channel():
+		games = channels[str(interaction.guild.id)]['games']
+		channel_select = discord.ui.Select(
+			options = [
+				discord.SelectOption(
+					label =	message['game_info']['title'],
+					value = str(key),
+				) for key, message in games.items() if message['deleted'] != 'True'
+			],
+			placeholder = f'Choose the message, what you want change',
+		)
+		async def select_callback(interaction: discord.Interaction):
+			channel = bot.get_channel(int(channels[str(interaction.guild.id)]['games'][str(channel_select.values[0])]['channel_id']))
+			try:
+				message = await channel.fetch_message(int(channels[str(interaction.guild.id)]['games'][str(channel_select.values[0])]['message_id']))
+			except Exception as e:
+				await interaction.response.send_message(content = 'Message is not exists', ephemeral = True)
+			else:
+
+				embed = message.embeds[0]
+				game = channels[str(interaction.guild.id)]['games'][str(channel_select.values[0])]['game_info']
+				game_id = str(channel_select.values[0])
+				modal = _ChangeMessageModal(game, embed, message, game_id)
+				labels = {
+					'title': 'Title of Game',
+                    'description': 'Description of Game',
+                    'url': 'URL of Game',
+                    'price': 'Price of Game',
+                    'key': 'Key of Game : JUST \'ru\' or \'not_ru\'',
+				}
+				for key, value in game.items():
+					check = discord.ui.TextInput(
+						label = labels[str(key)],
+						style = discord.TextStyle.short if key != 'description' else discord.TextStyle.long,
+						default = str(value),
+						required = True,
+						custom_id = str(key)
+					)
+					try:
+						modal.add_item(check)
+					except Exception as e:
+						pass
+				await interaction.response.send_modal(modal)
+
+		channel_select.callback = select_callback
+		return channel_select
+
+	view = discord.ui.View()
+	view.add_item(select_channel())
+	await interaction.response.send_message(view = view, ephemeral = True)
+
+
 @bot.tree.command(name='send_to_channel')
 @app_commands.guild_only()
 @in_list_users()
@@ -784,7 +954,7 @@ async def send_to_channel(interaction: discord.Interaction, user: discord.Member
 
 # 	await interaction.response.send_message(f'All ready {interaction.user.mention}! Bot was stoped!', ephemeral=True)
 
-@bot.tree.command(name='set_userperm_list')
+@bot.tree.command(name='give_permissions')
 @app_commands.guild_only()
 @is_owner()
 async def give_permissions(interaction: discord.Interaction, user: discord.Member, boolean: bool):
@@ -852,6 +1022,12 @@ async def send_to_channel_error(interaction: discord.Interaction, error):
 async def settings_error(interaction: discord.Interaction, error):
 	if isinstance(error, app_commands.errors.MissingPermissions):
 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
+
+@fix_message.error
+async def fix_message_error(interaction: discord.Interaction, error):
+	if isinstance(error, app_commands.errors.MissingPermissions):
+		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
+
 
 load_dotenv(find_dotenv())
 

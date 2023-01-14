@@ -53,8 +53,20 @@ def check_new_games(key='ru', API='https://store-site-backend-static.ak.epicgame
 				for k in game['keyImages']:
 					if k['type'] == 'OfferImageWide' or k['type'] == 'DieselStoreFrontWide':
 						game_image = k['url']
+				
+				game_url = ''
+				
+				try:
+					x = len(game['offerMappings'])
+				except Exception as e:
+					print(e)
+					print(game)
 
-				game_url = game['catalogNs']['mappings'][0]['pageSlug']
+				if len(game['offerMappings']) == 0:
+					game_url = game['catalogNs']['mappings'][0]['pageSlug']
+				else:
+					game_url = game['offerMappings'][0]['pageSlug']
+
 				game_price = game['price']['totalPrice']['fmtPrice']['originalPrice']
 
 				game_promotions = game['promotions']['promotionalOffers']
