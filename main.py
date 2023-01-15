@@ -5,7 +5,8 @@ from discord import app_commands
 
 from dotenv import load_dotenv, find_dotenv
 from datetime import datetime as dt
-from datetime import timedelta
+#from datetime import timedelta
+from pytz import timezone
 
 import os
 import json
@@ -156,7 +157,7 @@ async def bot_loop_delete_message():
 		if len(check['games']) != 0:
 			for key, game in check['games'].items():
 				if game['deleted'] != 'True':
-					timenow = dt.utcnow() + timedelta(seconds=(3600*3))
+					timenow = dt.utcnow()
 					date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
 					if date_end < timenow:
 						channel = bot.get_channel(int(check['channel']))
@@ -173,7 +174,10 @@ async def bot_loop_delete_message():
 								embed = discord.Embed()
 								embed.title = GM['title']
 								embed.colour = discord.Color.green()
-								embed.timestamp = dt.strptime(GM['date_end'], "%Y-%m-%d %H:%M:%S")
+								utc = timezone('UTC')
+								time = dt.strptime(GM['date_end'], "%Y-%m-%d %H:%M:%S")
+								time = utc.localize(time)
+								embed.timestamp = time
 								price = GM['price']
 								embed.add_field(name = f'Цена игры ({price})', value = GM['description'], inline = False)
 								embed.set_image(url=GM['image'])
@@ -232,8 +236,10 @@ async def bot_loop():
 			for key, game in games.items():
 				if key not in check['games']:
 					if game['expired'] == 'False' and game['started'] == 'True':
+						utc = timezone('UTC')
 						date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
-						
+						date_end = utc.localize(date_end)
+
 						embed = discord.Embed()
 						embed.title = game['title']
 						embed.colour = discord.Color.green()
@@ -333,7 +339,10 @@ async def test_script(interaction: discord.Interaction):
 			embed.title = game['title']
 			embed.colour = discord.Color.green()
 			#embed.url = 'https://store.epicgames.com/en/p/eximius-seize-the-frontline'
-			embed.timestamp = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S") - timedelta(seconds=(3600*3))
+			utc = timezone('UTC')
+			time = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
+			time = utc.localize(time)
+			embed.timestamp = time
 			price = game['price']
 			embed.add_field(name = f'Цена игры ({price})', value = game['description'], inline = False)
 			embed.set_image(url=game['image'])
@@ -378,7 +387,7 @@ async def embedSettignsMenu(interaction: discord.Interaction):
 	embed.set_author(name = interaction.user.name, icon_url = interaction.user.display_avatar.url)
 	embed.set_thumbnail(url = str(interaction.guild.icon))
 	embed.colour = discord.Color.green()
-	embed.timestamp = dt.utcnow() + timedelta(seconds=(3600*3))
+	embed.timestamp = dt.now(timezone('UTC'))
 
 	return embed
 
@@ -474,7 +483,7 @@ class _ChannelSettingsMenu(discord.ui.View):
 		embed.add_field(name = f'Current channel for {interaction.guild.name} channel', value = self.last_channel, inline = False)
 		embed.set_thumbnail(url = str(interaction.guild.icon))
 		embed.colour = discord.Color.green()
-		embed.timestamp = dt.utcnow() + timedelta(seconds=(3600*3))
+		embed.timestamp = dt.now(timezone('UTC'))
 
 		async def select_callback(interaction: discord.Interaction):
 			channel_new = bot.get_channel(int(channel_select.values[0]))
