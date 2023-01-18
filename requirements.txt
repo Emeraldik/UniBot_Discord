@@ -2,3 +2,4 @@ discord
 requests
 python-dotenv
 python-translator
+pytz

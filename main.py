@@ -5,7 +5,6 @@ from discord import app_commands
 
 from dotenv import load_dotenv, find_dotenv
 from datetime import datetime as dt
-#from datetime import timedelta
 from pytz import timezone
 
 import os
@@ -736,6 +735,48 @@ class _ChangeMessageModal(discord.ui.Modal):
 			embed = self.embed,
 		)
 
+class _SubmitMessageModal(discord.ui.Modal, title = 'Submit for delete message: write \'SUBMIT\''):
+	check = discord.ui.TextInput(
+		label = 'Submit reset',
+		style = discord.TextStyle.short,
+		placeholder = 'SUBMIT',
+		required = False,
+	)
+
+	async def on_submit(self, interaction: discord.Interaction):
+		if self.check.value != 'SUBMIT': 
+			await interaction.response.edit_message(
+				content = 'Message don\'t deleted!',
+				embed = None,
+				view = None,
+			)
+			return
+
+		with open(files['channels'], 'r', encoding='utf-8') as file:
+			channels = json.load(file)
+		
+		games = channels[str(interaction.guild.id)]['games']
+		games[str(self.game_id)]['deleted'] = str(True)
+
+		with open(files['channels'], 'w', encoding='utf-8') as file:
+			channels[str(interaction.guild.id)] = {
+				'channel': channels[str(interaction.guild.id)]['channel'],
+				'status': channels[str(interaction.guild.id)]['status'],
+				'everyone': channels[str(interaction.guild.id)]['everyone'],
+				'need_delete': channels[str(interaction.guild.id)]['need_delete'],
+				'games': games,
+			}
+
+			json.dump(channels, file, ensure_ascii=False, indent=4)
+
+		await self.message.delete()
+
+		await interaction.response.edit_message(
+			content = 'Message was deleted!',
+			embed = None,
+			view = None,
+		)
+
 @bot.tree.command(name='fix_message')
 @app_commands.guild_only()
 @has_channel_permissions()
@@ -761,31 +802,75 @@ async def fix_message(interaction: discord.Interaction):
 			except Exception as e:
 				await interaction.response.send_message(content = 'Message is not exists', ephemeral = True)
 			else:
-
 				embed = message.embeds[0]
 				game = channels[str(interaction.guild.id)]['games'][str(channel_select.values[0])]['game_info']
 				game_id = str(channel_select.values[0])
-				modal = _ChangeMessageModal(game, embed, message, game_id)
-				labels = {
-					'title': 'Title of Game',
-                    'description': 'Description of Game',
-                    'url': 'URL of Game',
-                    'price': 'Price of Game',
-                    'key': 'Key of Game : JUST \'ru\' or \'not_ru\'',
-				}
-				for key, value in game.items():
-					check = discord.ui.TextInput(
-						label = labels[str(key)],
-						style = discord.TextStyle.short if key != 'description' else discord.TextStyle.long,
-						default = str(value),
-						required = True,
-						custom_id = str(key)
-					)
-					try:
-						modal.add_item(check)
-					except Exception as e:
-						pass
-				await interaction.response.send_modal(modal)
+
+				label = '(Не для RU аккаунта)' if game['key'] == 'not_ru' else ''
+				
+				view = discord.ui.View()
+				view.add_item(discord.ui.Button(
+					label = f'Ссылка на раздачу {label}',
+					style = discord.ButtonStyle.success,
+					url = game['url'],
+					emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+					disabled = False,
+				))
+
+				button_change = discord.ui.Button(
+					label = f'Change message',
+					style = discord.ButtonStyle.primary,
+					disabled = False,
+				)
+
+				async def button_change_callback(interaction: discord.Interaction):
+					modal = _ChangeMessageModal(game, embed, message, game_id)
+					labels = {
+						'title': 'Title of Game',
+	                    'description': 'Description of Game',
+	                    'url': 'URL of Game',
+	                    'price': 'Price of Game',
+	                    'key': 'Key of Game : JUST \'ru\' or \'not_ru\'',
+					}
+					for key, value in game.items():
+						check = discord.ui.TextInput(
+							label = labels[str(key)],
+							style = discord.TextStyle.short if key != 'description' else discord.TextStyle.long,
+							default = str(value),
+							required = True,
+							custom_id = str(key)
+						)
+						try:
+							modal.add_item(check)
+						except Exception as e:
+							pass
+					await interaction.response.send_modal(modal)
+
+				button_change.callback = button_change_callback
+
+				button_delete = discord.ui.Button(
+					label = f'Delete message',
+					style = discord.ButtonStyle.danger,
+					disabled = False,
+				)
+
+				async def button_delete_callback(interaction: discord.Interaction):
+					modal = _SubmitMessageModal()
+					modal.game_id = game_id
+					modal.game = game
+					modal.message = message
+					await interaction.response.send_modal(modal)
+
+				button_delete.callback = button_delete_callback
+
+				view.add_item(button_change)
+				view.add_item(button_delete)
+
+				await interaction.response.edit_message(
+					content = 'How it view now', 
+					embed = embed, 
+					view = view,
+				)
 
 		channel_select.callback = select_callback
 		return channel_select
