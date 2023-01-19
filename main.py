@@ -207,16 +207,16 @@ async def bot_loop_delete_message():
 							'game_info': game['game_info'],
 						}
 
-						with open(files['channels'], 'w', encoding='utf-8') as file:
-							channels[str(guild.id)] = {
-								'channel': str(check['channel']),
-								'status': str(check['status']),
-								'everyone': str(check['everyone']),
-								'need_delete': str(check['need_delete']),
-								'games': check['games'],
-							}
+	with open(files['channels'], 'w', encoding='utf-8') as file:
+		channels[str(guild.id)] = {
+			'channel': str(check['channel']),
+			'status': str(check['status']),
+			'everyone': str(check['everyone']),
+			'need_delete': str(check['need_delete']),
+			'games': check['games'],
+		}
 
-							json.dump(channels, file, ensure_ascii=False, indent=4)
+		json.dump(channels, file, ensure_ascii=False, indent=4)
 						
 @tasks.loop(minutes=5.0, reconnect=True)
 async def bot_loop():
@@ -234,7 +234,7 @@ async def bot_loop():
 			channel = bot.get_channel(int(check['channel']))
 			for key, game in games.items():
 				if key not in check['games']:
-					if game['expired'] == 'False' and game['started'] == 'True':
+					if ((game['started'] == 'True') and (game['expired'] == 'False')):
 						utc = timezone('UTC')
 						date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
 						date_end = utc.localize(date_end)
@@ -285,16 +285,16 @@ async def bot_loop():
 							'game_info': game_json,
 						}
 
-						with open(files['channels'], 'w', encoding='utf-8') as file:
-							channels[str(guild.id)] = {
-								'channel': str(check['channel']),
-								'status': str(check['status']),
-								'everyone': str(check['everyone']),
-								'need_delete': str(check['need_delete']),
-								'games': games,
-							}
+	with open(files['channels'], 'w', encoding='utf-8') as file:
+		channels[str(guild.id)] = {
+			'channel': str(check['channel']),
+			'status': str(check['status']),
+			'everyone': str(check['everyone']),
+			'need_delete': str(check['need_delete']),
+			'games': games,
+		}
 
-							json.dump(channels, file, ensure_ascii=False, indent=4)
+		json.dump(channels, file, ensure_ascii=False, indent=4)
 
 def is_owner():
 	def predicate(interaction: discord.Interaction) -> bool:
