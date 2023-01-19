@@ -119,6 +119,31 @@ async def on_guild_join(guild):
 
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 
+	data_members = {}
+
+	with open(files['users'], 'r', encoding='utf-8') as file:
+		data = json.load(file)
+
+	with open(files['users'], 'w', encoding='utf-8') as file:
+		for member in guild.members:
+			if not member.bot:
+				if not str(guild.id) in data:
+					data_members[str(member.id)] = {
+						'name': str(member.name),
+						'has_permissions': str(True) if ((str(member.id) in users) or (member.id == ownerID)) else str(False),  
+					}
+				elif not str(member.id) in data[str(guild.id)]:
+					data_members[str(member.id)] = {
+						'name': str(member.name),
+						'has_permissions': str(True) if ((str(member.id) in users) or (member.id == ownerID)) else str(False),  
+					}
+				else:
+					data_members = data[str(guild.id)]
+
+		data[str(guild.id)] = data_members
+
+		json.dump(data, file, ensure_ascii=False, indent=4)
+
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
 		name = f'{len(bot.guilds)} servers ({len(bot.users)} users)',
@@ -159,7 +184,7 @@ async def bot_loop_delete_message():
 					timenow = dt.utcnow()
 					date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
 					if date_end < timenow:
-						channel = bot.get_channel(int(check['channel']))
+						channel = bot.get_channel(int(game['channel_id']))
 						try:
 							message = await channel.fetch_message(game['message_id'])
 						except Exception as e:
@@ -199,24 +224,24 @@ async def bot_loop_delete_message():
 									view = button,
 								)
 
-						check['games'][str(key)] = {
-							'date_end': str(game['date_end']),
-							'message_id': str(game['message_id']),
-							'channel_id': str(game['channel_id']),
-							'deleted': str(True),
-							'game_info': game['game_info'],
-						}
+								check['games'][str(key)] = {
+									'date_end': str(game['date_end']),
+									'message_id': str(game['message_id']),
+									'channel_id': str(game['channel_id']),
+									'deleted': str(True),
+									'game_info': game['game_info'],
+								}
 
-						with open(files['channels'], 'w', encoding='utf-8') as file:
-							channels[str(guild.id)] = {
-								'channel': str(check['channel']),
-								'status': str(check['status']),
-								'everyone': str(check['everyone']),
-								'need_delete': str(check['need_delete']),
-								'games': check['games'],
-							}
+								channels[str(guild.id)] = {
+									'channel': str(check['channel']),
+									'status': str(check['status']),
+									'everyone': str(check['everyone']),
+									'need_delete': str(check['need_delete']),
+									'games': check['games'],
+								}
 
-							json.dump(channels, file, ensure_ascii=False, indent=4)
+	with open(files['channels'], 'w', encoding='utf-8') as file:
+		json.dump(channels, file, ensure_ascii=False, indent=4)
 						
 @tasks.loop(minutes=5.0, reconnect=True)
 async def bot_loop():
@@ -237,6 +262,7 @@ async def bot_loop():
 					if game['expired'] == 'False' and game['started'] == 'True':
 						utc = timezone('UTC')
 						date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
+						date_for_json = date_end
 						date_end = utc.localize(date_end)
 
 						embed = discord.Embed()
@@ -278,23 +304,23 @@ async def bot_loop():
 
 						games = channels[str(guild.id)]['games']
 						games[str(game['id'])] = {
-							'date_end': str(date_end),
+							'date_end': str(date_for_json),
 							'message_id': str(message.id),
 							'channel_id': str(check['channel']),
 							'deleted': str(False),
 							'game_info': game_json,
 						}
 
-						with open(files['channels'], 'w', encoding='utf-8') as file:
-							channels[str(guild.id)] = {
-								'channel': str(check['channel']),
-								'status': str(check['status']),
-								'everyone': str(check['everyone']),
-								'need_delete': str(check['need_delete']),
-								'games': games,
-							}
+						channels[str(guild.id)] = {
+							'channel': str(check['channel']),
+							'status': str(check['status']),
+							'everyone': str(check['everyone']),
+							'need_delete': str(check['need_delete']),
+							'games': games,
+						}
 
-							json.dump(channels, file, ensure_ascii=False, indent=4)
+	with open(files['channels'], 'w', encoding='utf-8') as file:
+		json.dump(channels, file, ensure_ascii=False, indent=4)
 
 def is_owner():
 	def predicate(interaction: discord.Interaction) -> bool:
@@ -384,7 +410,7 @@ async def embedSettignsMenu(interaction: discord.Interaction):
 	embed.add_field(name = '\u200b', value = '\u200b', inline = True) # Empty Field
 	embed.add_field(name = f'Bot Status', value = start_stop_name, inline = True)
 	embed.set_author(name = interaction.user.name, icon_url = interaction.user.display_avatar.url)
-	embed.set_thumbnail(url = str(interaction.guild.icon))
+	embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://cdn.onlinewebfonts.com/svg/img_391144.png')
 	embed.colour = discord.Color.green()
 	embed.timestamp = dt.now(timezone('UTC'))
 
@@ -784,8 +810,8 @@ async def fix_message(interaction: discord.Interaction):
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
 
+	games = channels[str(interaction.guild.id)]['games']
 	def select_channel():
-		games = channels[str(interaction.guild.id)]['games']
 		channel_select = discord.ui.Select(
 			options = [
 				discord.SelectOption(
@@ -874,6 +900,11 @@ async def fix_message(interaction: discord.Interaction):
 
 		channel_select.callback = select_callback
 		return channel_select
+
+	options_check = [key for key, message in games.items() if message['deleted'] != 'True']
+	if len(options_check) == 0:
+		await interaction.response.send_message('There are no messages with an existing giveaway', ephemeral = True)
+		return
 
 	view = discord.ui.View()
 	view.add_item(select_channel())
@@ -1128,15 +1159,17 @@ async def send_to_channel_error(interaction: discord.Interaction, error):
 
 @settings.error
 async def settings_error(interaction: discord.Interaction, error):
+	print(error)
 	if isinstance(error, app_commands.errors.CheckFailure):
 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
 
 @fix_message.error
 async def fix_message_error(interaction: discord.Interaction, error):
+	print(error)
 	if isinstance(error, app_commands.errors.CheckFailure):
 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
 
 
 load_dotenv(find_dotenv())
 
-bot.run(os.getenv('TOKEN'))
+bot.run(os.environ['TOKEN'])
