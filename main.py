@@ -20,7 +20,6 @@ files = {
 
 users = {
 	'303498186708746240',
-	'385446792306884609',
 }
 
 ownerID = 303498186708746240
@@ -80,9 +79,9 @@ async def on_ready():
 		with open(files['channels'], 'w', encoding='utf-8') as file:
 			if not str(guild.id) in channels:
 				channels[str(guild.id)] = {
-					'channel': str(None),
+					'channel': str(0),
 					'status': str(False),
-					'everyone': str(False),
+					'role': str(0),
 					'need_delete': str(False),
 					'games': {},
 				}
@@ -110,9 +109,9 @@ async def on_guild_join(guild):
 	with open(files['channels'], 'w', encoding='utf-8') as file:
 		if not str(guild.id) in channels:
 			channels[str(guild.id)] = {
-				'channel': str(None),
+				'channel': str(0),
 				'status': str(False),
-				'everyone': str(False),
+				'role': str(0),
 				'need_delete': str(False),
 				'games': {},
 			}
@@ -150,6 +149,27 @@ async def on_guild_join(guild):
 	))
 
 @bot.event
+async def on_guild_remove(guild):
+	with open(files['channels'], 'r', encoding='utf-8') as file:
+		channels = json.load(file)
+
+	with open(files['channels'], 'w', encoding='utf-8') as file:
+		channels[str(guild.id)] = {
+			'channel': channels[str(guild.id)]['channel'],
+			'status': str(False),
+			'role': channels[str(guild.id)]['role'],
+			'need_delete': channels[str(guild.id)]['need_delete'],
+			'games': channels[str(guild.id)]['games'],
+		}
+
+		json.dump(channels, file, ensure_ascii=False, indent=4)
+	
+	await bot.change_presence(activity = discord.Activity(
+		type = discord.ActivityType.watching,
+		name = f'{len(bot.guilds)} servers ({len(bot.users)} users)',
+	))
+
+@bot.event
 async def on_member_join(member):
 	with open(files['users'], 'r', encoding='utf-8') as file:
 		data = json.load(file)
@@ -161,12 +181,36 @@ async def on_member_join(member):
 				'name': str(member.name),
 				'has_permissions': str(True) if ((str(member.id) in users) or (member.id == ownerID)) else str(False),  
 			}
+			data[str(member.guild.id)] = data_members
+
 		json.dump(data, file, ensure_ascii=False, indent=4)
 
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
 		name = f'{len(bot.guilds)} servers ({len(bot.users)} users)',
 	))
+
+@bot.event
+async def on_member_remove(member):
+	await bot.change_presence(activity = discord.Activity(
+		type = discord.ActivityType.watching,
+		name = f'{len(bot.guilds)} servers ({len(bot.users)} users)',
+	))
+
+@bot.event
+async def on_user_update(before, after):
+	with open(files['users'], 'r', encoding='utf-8') as file:
+		data = json.load(file)
+
+	with open(files['users'], 'w', encoding='utf-8') as file:
+		for key, guild in data.items():
+			if str(before.id) in guild:
+				guild[str(before.id)] = {
+					'name': str(after.name),
+					'has_permissions': str(True) if ((str(before.id) in users) or (before.id == ownerID)) else str(False),  
+				}
+	
+		json.dump(data, file, ensure_ascii=False, indent=4)
 
 @tasks.loop(minutes=10.0, reconnect=True)
 async def bot_loop_delete_message():
@@ -235,7 +279,7 @@ async def bot_loop_delete_message():
 								channels[str(guild.id)] = {
 									'channel': str(check['channel']),
 									'status': str(check['status']),
-									'everyone': str(check['everyone']),
+									'role': str(check['role']),
 									'need_delete': str(check['need_delete']),
 									'games': check['games'],
 								}
@@ -243,7 +287,7 @@ async def bot_loop_delete_message():
 	with open(files['channels'], 'w', encoding='utf-8') as file:
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 						
-@tasks.loop(minutes=5.0, reconnect=True)
+@tasks.loop(seconds=30.0, reconnect=True)
 async def bot_loop():
 	game_informer.check_games()
 
@@ -257,6 +301,8 @@ async def bot_loop():
 		check = channels[str(guild.id)]
 		if check['channel'] != 'None' and check['status'] != 'False':
 			channel = bot.get_channel(int(check['channel']))
+			if channel == None:
+				continue
 			for key, game in games.items():
 				if key not in check['games']:
 					if game['expired'] == 'False' and game['started'] == 'True':
@@ -285,7 +331,11 @@ async def bot_loop():
 							emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
 							disabled = False,
 						))
-						content = '@everyone' if check['everyone'] == 'True' else ''
+						
+						content = ''
+
+						if guild.get_role(int(check['role'])) != None:
+							content = guild.get_role(int(check['role'])).mention if guild.get_role(int(check['role'])).name != '@everyone' else '@everyone'
 						
 						message = await channel.send(
 							content = content, 
@@ -302,8 +352,8 @@ async def bot_loop():
 		                    'key': str(game['key']),
 						}
 
-						games = channels[str(guild.id)]['games']
-						games[str(game['id'])] = {
+						games_channel = channels[str(guild.id)]['games']
+						games_channel[str(game['id'])] = {
 							'date_end': str(date_for_json),
 							'message_id': str(message.id),
 							'channel_id': str(check['channel']),
@@ -314,9 +364,9 @@ async def bot_loop():
 						channels[str(guild.id)] = {
 							'channel': str(check['channel']),
 							'status': str(check['status']),
-							'everyone': str(check['everyone']),
+							'role': str(check['role']),
 							'need_delete': str(check['need_delete']),
-							'games': games,
+							'games': games_channel,
 						}
 
 	with open(files['channels'], 'w', encoding='utf-8') as file:
@@ -348,10 +398,10 @@ def has_channel_permissions():
 		
 	return app_commands.check(predicate)
 
-@bot.tree.command(name='test_script')
+@bot.tree.command(name='dev_test')
 @app_commands.guild_only()
 @is_owner()
-async def test_script(interaction: discord.Interaction):
+async def dev_test(interaction: discord.Interaction):
 	with open(files['games'], 'r', encoding='utf-8') as file:
 		games = json.load(file)
 
@@ -363,7 +413,6 @@ async def test_script(interaction: discord.Interaction):
 			embed = discord.Embed()
 			embed.title = game['title']
 			embed.colour = discord.Color.green()
-			#embed.url = 'https://store.epicgames.com/en/p/eximius-seize-the-frontline'
 			utc = timezone('UTC')
 			time = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
 			time = utc.localize(time)
@@ -396,8 +445,16 @@ async def embedSettignsMenu(interaction: discord.Interaction):
 		channels = json.load(file)
 		
 	guild = channels[str(interaction.guild.id)]
-	channel_name = bot.get_channel(int(guild['channel'])).name if guild['channel'] != 'None' else 'No channel' 
-	everyone_name = 'Enable @everyone' if guild['everyone'] == 'True' else 'Disable @everyone'
+	
+	channel_name = 'No channel'
+	if bot.get_channel(int(guild['channel'])) != None:
+		channel_name = bot.get_channel(int(guild['channel'])).name
+	
+	role_name = 'No role'
+	
+	if interaction.guild.get_role(int(guild['role'])) != None:
+		role_name = interaction.guild.get_role(int(guild['role'])).name
+	
 	delete_edit_name = 'Now message will be Delete' if guild['need_delete'] == 'True' else 'Now message will be Edit'
 	start_stop_name = 'Bot Started' if guild['status'] == 'True' else 'Bot Stoped'
 
@@ -405,12 +462,12 @@ async def embedSettignsMenu(interaction: discord.Interaction):
 	embed.title = f'Settings of Bot'
 	embed.add_field(name = f'Current channel', value = channel_name, inline = True)
 	embed.add_field(name = '\u200b', value = '\u200b', inline = True) # Empty Field
-	embed.add_field(name = f'Everyone setting', value = everyone_name, inline = True)
+	embed.add_field(name = f'Current role', value = role_name, inline = True)
 	embed.add_field(name = f'Delete/Edit setting', value = delete_edit_name, inline = True)
 	embed.add_field(name = '\u200b', value = '\u200b', inline = True) # Empty Field
 	embed.add_field(name = f'Bot Status', value = start_stop_name, inline = True)
 	embed.set_author(name = interaction.user.name, icon_url = interaction.user.display_avatar.url)
-	embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://cdn.onlinewebfonts.com/svg/img_391144.png')
+	embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
 	embed.colour = discord.Color.green()
 	embed.timestamp = dt.now(timezone('UTC'))
 
@@ -441,9 +498,9 @@ class _SubmitModal(discord.ui.Modal, title = 'Submit for reset settings: write \
 
 		with open(files['channels'], 'w', encoding='utf-8') as file:
 			channels[str(interaction.guild.id)] = {
-				'channel': str(None),
+				'channel': str(0),
 				'status': str(False),
-				'everyone': str(False),
+				'role': str(0),
 				'need_delete': str(False),
 				'games': channels[str(interaction.guild.id)]['games'],
 			}
@@ -501,29 +558,35 @@ class _ChannelSettingsMenu(discord.ui.View):
 			placeholder = f'Choose the channel',
 		)
 
-		channel_name = bot.get_channel(int(channel)).name if channels[str(interaction.guild_id)]['channel'] != 'None' else 'No channel' 
+		channel_name = 'No channel'
+		if bot.get_channel(int(channel)) != None:
+			channel_name = bot.get_channel(int(channel)).name
 		self.last_channel = channel_name
 		embed = discord.Embed()
 		embed.title = f'Settings of Channel'
 		embed.add_field(name = f'Current channel for {interaction.guild.name} channel', value = self.last_channel, inline = False)
-		embed.set_thumbnail(url = str(interaction.guild.icon))
+		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
 		embed.colour = discord.Color.green()
 		embed.timestamp = dt.now(timezone('UTC'))
 
 		async def select_callback(interaction: discord.Interaction):
 			channel_new = bot.get_channel(int(channel_select.values[0]))
-			if channel == channel_new.name:
+			if channel_new == None:
+				await interaction.response.send_message('Channel doesn\'t exists', ephemeral = True)
 				return
+
+			# if channel_name == channel_new.name:
+			# 	return
 
 			embed.clear_fields()
 			embed.add_field(name = f'Current channel for {interaction.guild.name} channel', value = channel_new.name, inline = False)
 			embed.add_field(name = f'Last channel', value = self.last_channel, inline = False)
-			self.last_channel = channel_new
+			self.last_channel = channel_new.name
 			with open(files['channels'], 'w', encoding='utf-8') as file:
 				channels[str(interaction.guild_id)] = {
 					'channel': str(channel_new.id),
 					'status': str(channels[str(interaction.guild_id)]['status']),
-					'everyone': str(channels[str(interaction.guild_id)]['everyone']),
+					'role': str(channels[str(interaction.guild_id)]['role']),
 					'need_delete': str(channels[str(interaction.guild_id)]['need_delete']),
 					'games': channels[str(interaction.guild_id)]['games'],
 				}
@@ -535,6 +598,76 @@ class _ChannelSettingsMenu(discord.ui.View):
 		channel_select.callback = select_callback
 
 		self.add_item(channel_select)
+		self.add_item(_ReturnButton(self.menu))
+		await interaction.response.edit_message(embed = embed, view = self)
+
+class _RoleSettingsMenu(discord.ui.View):
+	async def update_message(self, interaction):
+		with open(files['channels'], 'r', encoding='utf-8') as file:
+			channels = json.load(file)
+
+		role = channels[str(interaction.guild.id)]['role']
+
+		role_select = discord.ui.Select(
+			options = [
+				discord.SelectOption(
+					label = role_.name,
+					value = str(role_.id)
+				) for role_ in interaction.guild.roles if (not role_.is_bot_managed())
+			] + [
+				discord.SelectOption(
+					label = 'None',
+					value = '0'
+				),
+			],
+			placeholder = f'Choose the role',
+		)
+
+		role_name = 'No role'
+		if interaction.guild.get_role(int(role)) != None:
+			role_name = interaction.guild.get_role(int(role)).name
+		self.last_role = role_name
+		embed = discord.Embed()
+		embed.title = f'Settings of Role'
+		embed.add_field(name = f'Current role for {interaction.guild.name} channel', value = self.last_role, inline = False)
+		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
+		embed.colour = discord.Color.green()
+		embed.timestamp = dt.now(timezone('UTC'))
+
+		async def select_callback(interaction: discord.Interaction):
+			role_new = interaction.guild.get_role(int(role_select.values[0])) if (role_select.values[0] != '0') else '0'
+			if role_new == None:
+				await interaction.response.send_message('Role doesn\'t exists', ephemeral = True)
+				return
+
+			if role_new == '0':
+				role_new_name = 'No role'
+			else:
+				role_new_name = role_new.name
+
+			# if self.last_role == role_new_name:
+			# 	return
+
+			embed.clear_fields()
+			embed.add_field(name = f'Current role for {interaction.guild.name} channel', value = role_new_name, inline = False)
+			embed.add_field(name = f'Last role', value = self.last_role, inline = False)
+			self.last_role = role_new_name
+			with open(files['channels'], 'w', encoding='utf-8') as file:
+				channels[str(interaction.guild_id)] = {
+					'channel': str(channels[str(interaction.guild_id)]['channel']),
+					'status': str(channels[str(interaction.guild_id)]['status']),
+					'role': str(role_new.id) if role_new != '0' else '0',
+					'need_delete': str(channels[str(interaction.guild_id)]['need_delete']),
+					'games': channels[str(interaction.guild_id)]['games'],
+				}
+
+				json.dump(channels, file, ensure_ascii=False, indent=4)
+
+			await interaction.response.edit_message(embed = embed, view = self)
+	
+		role_select.callback = select_callback
+
+		self.add_item(role_select)
 		self.add_item(_ReturnButton(self.menu))
 		await interaction.response.edit_message(embed = embed, view = self)
 
@@ -558,7 +691,7 @@ class _StatusSettingsButton(discord.ui.Button):
 			channels[str(interaction.guild_id)] = {
 				'channel': str(channels[str(interaction.guild_id)]['channel']),
 				'status': str(True) if channels[str(interaction.guild_id)]['status'] == 'False' else str(False),
-				'everyone': str(channels[str(interaction.guild_id)]['everyone']),
+				'role': str(channels[str(interaction.guild_id)]['role']),
 				'need_delete': str(channels[str(interaction.guild_id)]['need_delete']),
 				'games': channels[str(interaction.guild_id)]['games'],
 			}
@@ -588,6 +721,11 @@ class _SettingsMenu(discord.ui.View):
 		row = 1,
 	)
 	async def channel_settings(self, interaction: discord.Interaction, button):
+		check_channels = [text.id for text in interaction.guild.text_channels]
+		if len(check_channels) == 0:
+			await interaction.response.send_message('No text channels in this guild', ephemeral = True)
+			return
+
 		channel_menu = _ChannelSettingsMenu()
 		channel_menu.menu = self
 		await channel_menu.update_message(interaction)
@@ -605,7 +743,7 @@ class _SettingsMenu(discord.ui.View):
 			channels[str(interaction.guild_id)] = {
 				'channel': str(channels[str(interaction.guild_id)]['channel']),
 				'status': str(channels[str(interaction.guild_id)]['status']),
-				'everyone': str(channels[str(interaction.guild_id)]['everyone']),
+				'role': str(channels[str(interaction.guild_id)]['role']),
 				'need_delete': str(True) if channels[str(interaction.guild_id)]['need_delete'] == 'False' else str(False),
 				'games': channels[str(interaction.guild_id)]['games'],
 			}
@@ -615,26 +753,34 @@ class _SettingsMenu(discord.ui.View):
 		await self.update_message(interaction)
 
 	@discord.ui.button(
-		style = discord.ButtonStyle.secondary,
-		label = 'Change Everyone setting',
+		style = discord.ButtonStyle.primary,
+		label = 'Choose role',
 		row = 0,
 	)
 	async def everyone_settings(self, interaction: discord.Interaction, button):
-		with open(files['channels'], 'r', encoding='utf-8') as file:
-			channels = json.load(file)
+		check_roles = [role_.id for role_ in interaction.guild.roles]
+		if len(check_roles) == 0:
+			await interaction.response.send_message('No roles in this guild', ephemeral = True)
+			return
 
-		with open(files['channels'], 'w', encoding='utf-8') as file:
-			channels[str(interaction.guild_id)] = {
-				'channel': str(channels[str(interaction.guild_id)]['channel']),
-				'status': str(channels[str(interaction.guild_id)]['status']),
-				'everyone': str(True) if channels[str(interaction.guild_id)]['everyone'] == 'False' else str(False),
-				'need_delete': str(channels[str(interaction.guild_id)]['need_delete']),
-				'games': channels[str(interaction.guild_id)]['games'],
-			}
+		role_menu = _RoleSettingsMenu()
+		role_menu.menu = self
+		await role_menu.update_message(interaction)
+		# with open(files['channels'], 'r', encoding='utf-8') as file:
+		# 	channels = json.load(file)
 
-			json.dump(channels, file, ensure_ascii=False, indent=4)
+		# with open(files['channels'], 'w', encoding='utf-8') as file:
+		# 	channels[str(interaction.guild_id)] = {
+		# 		'channel': str(channels[str(interaction.guild_id)]['channel']),
+		# 		'status': str(channels[str(interaction.guild_id)]['status']),
+		# 		'role': '@everyone' if channels[str(interaction.guild_id)]['role'] == 'None' else 'None',
+		# 		'need_delete': str(channels[str(interaction.guild_id)]['need_delete']),
+		# 		'games': channels[str(interaction.guild_id)]['games'],
+		# 	}
+
+		# 	json.dump(channels, file, ensure_ascii=False, indent=4)
 		
-		await self.update_message(interaction)
+		# await self.update_message(interaction)
 
 	@discord.ui.button(
 		style = discord.ButtonStyle.danger,
@@ -713,7 +859,7 @@ class _ChangeMessageModal(discord.ui.Modal):
 				channels[str(interaction.guild.id)] = {
 					'channel': channels[str(interaction.guild.id)]['channel'],
 					'status': channels[str(interaction.guild.id)]['status'],
-					'everyone': channels[str(interaction.guild.id)]['everyone'],
+					'role': channels[str(interaction.guild.id)]['role'],
 					'need_delete': channels[str(interaction.guild.id)]['need_delete'],
 					'games': games,
 				}
@@ -788,7 +934,7 @@ class _SubmitMessageModal(discord.ui.Modal, title = 'Submit for delete message: 
 			channels[str(interaction.guild.id)] = {
 				'channel': channels[str(interaction.guild.id)]['channel'],
 				'status': channels[str(interaction.guild.id)]['status'],
-				'everyone': channels[str(interaction.guild.id)]['everyone'],
+				'role': channels[str(interaction.guild.id)]['role'],
 				'need_delete': channels[str(interaction.guild.id)]['need_delete'],
 				'games': games,
 			}
@@ -1095,6 +1241,7 @@ async def send_to_channel(interaction: discord.Interaction, user: discord.Member
 
 @bot.tree.command(name='give_permissions')
 @app_commands.guild_only()
+@app_commands.describe(boolean = 'True - give permissions | False : take permissions')
 @is_owner()
 async def give_permissions(interaction: discord.Interaction, user: discord.Member, boolean: bool):
 	with open(files['users'], 'r', encoding='utf-8') as file:
@@ -1137,8 +1284,8 @@ async def give_permissions(interaction: discord.Interaction, user: discord.Membe
 # 	if isinstance(error, app_commands.errors.MissingPermissions):
 # 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
 
-@test_script.error
-async def test_script_error(interaction: discord.Interaction, error):
+@dev_test.error
+async def dev_test_error(interaction: discord.Interaction, error):
 	if isinstance(error, app_commands.errors.CheckFailure):
 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
 
@@ -1165,7 +1312,7 @@ async def settings_error(interaction: discord.Interaction, error):
 
 @fix_message.error
 async def fix_message_error(interaction: discord.Interaction, error):
-	print(error)
+	#print(error)
 	if isinstance(error, app_commands.errors.CheckFailure):
 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
 
