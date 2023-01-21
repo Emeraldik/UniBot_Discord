@@ -11,6 +11,7 @@ import os
 import json
 
 import game_informer
+from language import language, LANG
 
 files = {
 	'users': 'users.json', 
@@ -82,7 +83,7 @@ async def on_ready():
 					'channel': str(0),
 					'status': str(False),
 					'role': str(0),
-					'need_delete': str(False),
+					'message_after': str(None),
 					'games': {},
 				}
 
@@ -112,7 +113,7 @@ async def on_guild_join(guild):
 				'channel': str(0),
 				'status': str(False),
 				'role': str(0),
-				'need_delete': str(False),
+				'message_after': str(None),
 				'games': {},
 			}
 
@@ -145,7 +146,7 @@ async def on_guild_join(guild):
 
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
-		name = f'{len(bot.guilds)} servers ({len(bot.users)} users)',
+		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"]} ({len(bot.users)} {language[LANG]["precense_users"]})',
 	))
 
 @bot.event
@@ -158,7 +159,7 @@ async def on_guild_remove(guild):
 			'channel': channels[str(guild.id)]['channel'],
 			'status': str(False),
 			'role': channels[str(guild.id)]['role'],
-			'need_delete': channels[str(guild.id)]['need_delete'],
+			'message_after': channels[str(guild.id)]['message_after'],
 			'games': channels[str(guild.id)]['games'],
 		}
 
@@ -166,7 +167,7 @@ async def on_guild_remove(guild):
 	
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
-		name = f'{len(bot.guilds)} servers ({len(bot.users)} users)',
+		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"]} ({len(bot.users)} {language[LANG]["precense_users"]})',
 	))
 
 @bot.event
@@ -187,14 +188,14 @@ async def on_member_join(member):
 
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
-		name = f'{len(bot.guilds)} servers ({len(bot.users)} users)',
+		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"]} ({len(bot.users)} {language[LANG]["precense_users"]})',
 	))
 
 @bot.event
 async def on_member_remove(member):
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
-		name = f'{len(bot.guilds)} servers ({len(bot.users)} users)',
+		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"]} ({len(bot.users)} {language[LANG]["precense_users"]})',
 	))
 
 @bot.event
@@ -207,7 +208,7 @@ async def on_user_update(before, after):
 			if str(before.id) in guild:
 				guild[str(before.id)] = {
 					'name': str(after.name),
-					'has_permissions': str(True) if ((str(before.id) in users) or (before.id == ownerID)) else str(False),  
+					'has_permissions': guild[str(before.id)]['has_permissions'],  
 				}
 	
 		json.dump(data, file, ensure_ascii=False, indent=4)
@@ -234,9 +235,9 @@ async def bot_loop_delete_message():
 						except Exception as e:
 							pass
 						else:
-							if check['need_delete'] == 'True':
+							if check['message_after'] == 'Delete':
 								await message.delete()
-							else:
+							elif check['message_after'] == 'Edit':
 								GM = games[key]
 
 								embed = discord.Embed()
@@ -247,16 +248,15 @@ async def bot_loop_delete_message():
 								time = utc.localize(time)
 								embed.timestamp = time
 								price = GM['price']
-								embed.add_field(name = f'Цена игры ({price})', value = GM['description'], inline = False)
+								embed.add_field(name = f'{language[LANG]["game_price"]} ({price})', value = GM['description'], inline = False)
 								embed.set_image(url=GM['image'])
 								embed.set_thumbnail(url='https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.icon-icons.com%2Ficons2%2F2429%2FPNG%2F512%2Fepic_games_logo_icon_147294.png&f=1&nofb=1&ipt=fcb317278eedd075465f00e4f3a6c99f2a970dc635bd138a317b027b936d260e&ipo=images')
-								embed.set_footer(text='Акция закончилась')
+								embed.set_footer(text = f'{language[LANG]["discount_ended"]}')
 								
-								label = '(Не для RU аккаунта)' if GM['key'] == 'not_ru' else ''
-
+								label = f'{language[LANG]["not_ru_akk"]}' if GM['key'] == 'not_ru' else ''
 								button = discord.ui.View()
 								button.add_item(discord.ui.Button(
-									label = f'Ссылка на раздачу {label}',
+									label = f'{language[LANG]["game_link"]} {label}',
 									style = discord.ButtonStyle.success,
 									url = GM['url'],
 									emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
@@ -268,26 +268,26 @@ async def bot_loop_delete_message():
 									view = button,
 								)
 
-								check['games'][str(key)] = {
-									'date_end': str(game['date_end']),
-									'message_id': str(game['message_id']),
-									'channel_id': str(game['channel_id']),
-									'deleted': str(True),
-									'game_info': game['game_info'],
-								}
+							check['games'][str(key)] = {
+								'date_end': str(game['date_end']),
+								'message_id': str(game['message_id']),
+								'channel_id': str(game['channel_id']),
+								'deleted': str(True),
+								'game_info': game['game_info'],
+							}
 
-								channels[str(guild.id)] = {
-									'channel': str(check['channel']),
-									'status': str(check['status']),
-									'role': str(check['role']),
-									'need_delete': str(check['need_delete']),
-									'games': check['games'],
-								}
+							channels[str(guild.id)] = {
+								'channel': str(check['channel']),
+								'status': str(check['status']),
+								'role': str(check['role']),
+								'message_after': str(check['message_after']),
+								'games': check['games'],
+							}
 
 	with open(files['channels'], 'w', encoding='utf-8') as file:
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 						
-@tasks.loop(seconds=30.0, reconnect=True)
+@tasks.loop(minutes=5.0, reconnect=True)
 async def bot_loop():
 	game_informer.check_games()
 
@@ -316,16 +316,16 @@ async def bot_loop():
 						embed.colour = discord.Color.green()
 						embed.timestamp = date_end
 						price = game['price']
-						embed.add_field(name = f'Цена игры ({price})', value = game['description'], inline = False)
+						embed.add_field(name = f'{language[LANG]["game_price"]} ({price})', value = game['description'], inline = False)
 						embed.set_image(url=game['image'])
 						embed.set_thumbnail(url='https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.icon-icons.com%2Ficons2%2F2429%2FPNG%2F512%2Fepic_games_logo_icon_147294.png&f=1&nofb=1&ipt=fcb317278eedd075465f00e4f3a6c99f2a970dc635bd138a317b027b936d260e&ipo=images')
-						embed.set_footer(text='Акция заканчивается')
+						embed.set_footer(text = f'{language[LANG]["discount_will_ended"]}')
 						
-						label = '(Не для RU аккаунта)' if game['key'] == 'not_ru' else ''
+						label = f'{language[LANG]["not_ru_akk"]}' if game['key'] == 'not_ru' else ''
 
 						button = discord.ui.View()
 						button.add_item(discord.ui.Button(
-							label = f'Ссылка на раздачу {label}',
+							label = f'{language[LANG]["game_link"]} {label}',
 							style = discord.ButtonStyle.success,
 							url = game['url'],
 							emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
@@ -365,7 +365,7 @@ async def bot_loop():
 							'channel': str(check['channel']),
 							'status': str(check['status']),
 							'role': str(check['role']),
-							'need_delete': str(check['need_delete']),
+							'message_after': str(check['message_after']),
 							'games': games_channel,
 						}
 
@@ -418,14 +418,14 @@ async def dev_test(interaction: discord.Interaction):
 			time = utc.localize(time)
 			embed.timestamp = time
 			price = game['price']
-			embed.add_field(name = f'Цена игры ({price})', value = game['description'], inline = False)
+			embed.add_field(name = f'{language[LANG]["game_price"]} ({price})', value = game['description'], inline = False)
 			embed.set_image(url=game['image'])
 			embed.set_thumbnail(url='https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.icon-icons.com%2Ficons2%2F2429%2FPNG%2F512%2Fepic_games_logo_icon_147294.png&f=1&nofb=1&ipt=fcb317278eedd075465f00e4f3a6c99f2a970dc635bd138a317b027b936d260e&ipo=images')
-			embed.set_footer(text='Акция закончилась')
+			embed.set_footer(text = f'{language[LANG]["discount_will_ended"]}')
 			
 			button = discord.ui.View()
 			button.add_item(discord.ui.Button(
-				label = 'Ссылка на раздачу',
+				label = f'{language[LANG]["game_link"]}',
 				style = discord.ButtonStyle.success,
 				url = game['url'],
 				emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
@@ -446,26 +446,31 @@ async def embedSettignsMenu(interaction: discord.Interaction):
 		
 	guild = channels[str(interaction.guild.id)]
 	
-	channel_name = 'No channel'
+	channel_name = language[LANG]["no_channel"]
 	if bot.get_channel(int(guild['channel'])) != None:
 		channel_name = bot.get_channel(int(guild['channel'])).name
 	
-	role_name = 'No role'
+	role_name = language[LANG]["no_role"]
 	
 	if interaction.guild.get_role(int(guild['role'])) != None:
 		role_name = interaction.guild.get_role(int(guild['role'])).name
 	
-	delete_edit_name = 'Now message will be Delete' if guild['need_delete'] == 'True' else 'Now message will be Edit'
-	start_stop_name = 'Bot Started' if guild['status'] == 'True' else 'Bot Stoped'
+	message_after_name = language[LANG]["no_message_changes"]
+	if guild['message_after'] == 'Delete':
+		message_after_name = language[LANG]["message_changes_delete"]
+	elif guild['message_after'] == 'Edit':
+		message_after_name = language[LANG]["message_changes_edit"]
+
+	start_stop_name = language[LANG]["bot_started"] if guild['status'] == 'True' else language[LANG]["bot_stoped"]
 
 	embed = discord.Embed()
-	embed.title = f'Settings of Bot'
-	embed.add_field(name = f'Current channel', value = channel_name, inline = True)
+	embed.title = f'{language[LANG]["settings"]}'
+	embed.add_field(name = f'{language[LANG]["current_channel"]}', value = channel_name, inline = True)
 	embed.add_field(name = '\u200b', value = '\u200b', inline = True) # Empty Field
-	embed.add_field(name = f'Current role', value = role_name, inline = True)
-	embed.add_field(name = f'Delete/Edit setting', value = delete_edit_name, inline = True)
+	embed.add_field(name = f'{language[LANG]["current_role"]}', value = role_name, inline = True)
+	embed.add_field(name = f'{language[LANG]["current_mode"]}', value = message_after_name, inline = True)
 	embed.add_field(name = '\u200b', value = '\u200b', inline = True) # Empty Field
-	embed.add_field(name = f'Bot Status', value = start_stop_name, inline = True)
+	embed.add_field(name = f'{language[LANG]["bot_status"]}', value = start_stop_name, inline = True)
 	embed.set_author(name = interaction.user.name, icon_url = interaction.user.display_avatar.url)
 	embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
 	embed.colour = discord.Color.green()
@@ -473,9 +478,9 @@ async def embedSettignsMenu(interaction: discord.Interaction):
 
 	return embed
 
-class _SubmitModal(discord.ui.Modal, title = 'Submit for reset settings: write \'SUBMIT\''):
+class _SubmitModal(discord.ui.Modal, title = language[LANG]["reset_submit_modal"]):
 	check = discord.ui.TextInput(
-		label = 'Submit reset',
+		label = language[LANG]["reset_submit"],
 		style = discord.TextStyle.short,
 		placeholder = 'SUBMIT',
 		required = False,
@@ -488,7 +493,7 @@ class _SubmitModal(discord.ui.Modal, title = 'Submit for reset settings: write \
 					btn.disabled = True
 
 			await interaction.response.edit_message(
-				content = 'Settings don\'t reset!',
+				content = language[LANG]["reset_canceled"],
 			 	view = self.view
 			)
 			return
@@ -501,7 +506,7 @@ class _SubmitModal(discord.ui.Modal, title = 'Submit for reset settings: write \
 				'channel': str(0),
 				'status': str(False),
 				'role': str(0),
-				'need_delete': str(False),
+				'message_after': str(None),
 				'games': channels[str(interaction.guild.id)]['games'],
 			}
 
@@ -512,7 +517,7 @@ class _SubmitModal(discord.ui.Modal, title = 'Submit for reset settings: write \
 				btn.disabled = True
 
 		await interaction.response.edit_message(
-			content = 'Settings reset!',
+			content = language[LANG]["reset_successful"],
 		 	view = self.view
 		)
 
@@ -522,7 +527,7 @@ class _ResetMenu(discord.ui.View):
 
 	@discord.ui.button(
 		style = discord.ButtonStyle.success,
-		label = 'Confirm',
+		label = language[LANG]["reset_confirm"],
 	)
 	async def confirm_callback(self, interaction: discord.Interaction, button):
 		submit = _SubmitModal()
@@ -533,7 +538,7 @@ class _ReturnButton(discord.ui.Button):
 	def __init__(self, view):
 		self.menu = view
 		super().__init__(
-			label = 'Return to settings menu',
+			label = language[LANG]["return_to_settings"],
 			style = discord.ButtonStyle.danger,
 			custom_id = '_return',
 		)
@@ -555,16 +560,16 @@ class _ChannelSettingsMenu(discord.ui.View):
 					value = str(text.id)
 				) for text in interaction.guild.text_channels
 			],
-			placeholder = f'Choose the channel',
+			placeholder = language[LANG]["choose_channel"],
 		)
 
-		channel_name = 'No channel'
+		channel_name = language[LANG]["no_channel"]
 		if bot.get_channel(int(channel)) != None:
 			channel_name = bot.get_channel(int(channel)).name
 		self.last_channel = channel_name
 		embed = discord.Embed()
-		embed.title = f'Settings of Channel'
-		embed.add_field(name = f'Current channel for {interaction.guild.name} channel', value = self.last_channel, inline = False)
+		embed.title = language[LANG]["settings_channel"]
+		embed.add_field(name = f'{language[LANG]["current_channel_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = self.last_channel, inline = False)
 		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
 		embed.colour = discord.Color.green()
 		embed.timestamp = dt.now(timezone('UTC'))
@@ -572,22 +577,22 @@ class _ChannelSettingsMenu(discord.ui.View):
 		async def select_callback(interaction: discord.Interaction):
 			channel_new = bot.get_channel(int(channel_select.values[0]))
 			if channel_new == None:
-				await interaction.response.send_message('Channel doesn\'t exists', ephemeral = True)
+				await interaction.response.send_message(f'{language[LANG]["channel_not_exists"]}', ephemeral = True)
 				return
 
 			# if channel_name == channel_new.name:
 			# 	return
 
 			embed.clear_fields()
-			embed.add_field(name = f'Current channel for {interaction.guild.name} channel', value = channel_new.name, inline = False)
-			embed.add_field(name = f'Last channel', value = self.last_channel, inline = False)
+			embed.add_field(name = f'{language[LANG]["current_channel_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = channel_new.name, inline = False)
+			embed.add_field(name = f'{language[LANG]["last_channel"]}', value = self.last_channel, inline = False)
 			self.last_channel = channel_new.name
 			with open(files['channels'], 'w', encoding='utf-8') as file:
 				channels[str(interaction.guild_id)] = {
 					'channel': str(channel_new.id),
 					'status': str(channels[str(interaction.guild_id)]['status']),
 					'role': str(channels[str(interaction.guild_id)]['role']),
-					'need_delete': str(channels[str(interaction.guild_id)]['need_delete']),
+					'message_after': str(channels[str(interaction.guild_id)]['message_after']),
 					'games': channels[str(interaction.guild_id)]['games'],
 				}
 
@@ -616,20 +621,20 @@ class _RoleSettingsMenu(discord.ui.View):
 				) for role_ in interaction.guild.roles if (not role_.is_bot_managed())
 			] + [
 				discord.SelectOption(
-					label = 'None',
+					label = language[LANG]["none_role"],
 					value = '0'
 				),
 			],
-			placeholder = f'Choose the role',
+			placeholder = language[LANG]["choose_role"],
 		)
 
-		role_name = 'No role'
+		role_name = language[LANG]["none_role"]
 		if interaction.guild.get_role(int(role)) != None:
 			role_name = interaction.guild.get_role(int(role)).name
 		self.last_role = role_name
 		embed = discord.Embed()
-		embed.title = f'Settings of Role'
-		embed.add_field(name = f'Current role for {interaction.guild.name} channel', value = self.last_role, inline = False)
+		embed.title = language[LANG]["settings_role"]
+		embed.add_field(name = f'{language[LANG]["current_role_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = self.last_role, inline = False)
 		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
 		embed.colour = discord.Color.green()
 		embed.timestamp = dt.now(timezone('UTC'))
@@ -637,11 +642,11 @@ class _RoleSettingsMenu(discord.ui.View):
 		async def select_callback(interaction: discord.Interaction):
 			role_new = interaction.guild.get_role(int(role_select.values[0])) if (role_select.values[0] != '0') else '0'
 			if role_new == None:
-				await interaction.response.send_message('Role doesn\'t exists', ephemeral = True)
+				await interaction.response.send_message(language[LANG]["role_not_exists"], ephemeral = True)
 				return
 
 			if role_new == '0':
-				role_new_name = 'No role'
+				role_new_name = language[LANG]["none_role"]
 			else:
 				role_new_name = role_new.name
 
@@ -649,15 +654,15 @@ class _RoleSettingsMenu(discord.ui.View):
 			# 	return
 
 			embed.clear_fields()
-			embed.add_field(name = f'Current role for {interaction.guild.name} channel', value = role_new_name, inline = False)
-			embed.add_field(name = f'Last role', value = self.last_role, inline = False)
+			embed.add_field(name = f'{language[LANG]["current_role_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = role_new_name, inline = False)
+			embed.add_field(name = f'{language[LANG]["last_role"]}', value = self.last_role, inline = False)
 			self.last_role = role_new_name
 			with open(files['channels'], 'w', encoding='utf-8') as file:
 				channels[str(interaction.guild_id)] = {
 					'channel': str(channels[str(interaction.guild_id)]['channel']),
 					'status': str(channels[str(interaction.guild_id)]['status']),
 					'role': str(role_new.id) if role_new != '0' else '0',
-					'need_delete': str(channels[str(interaction.guild_id)]['need_delete']),
+					'message_after': str(channels[str(interaction.guild_id)]['message_after']),
 					'games': channels[str(interaction.guild_id)]['games'],
 				}
 
@@ -671,6 +676,63 @@ class _RoleSettingsMenu(discord.ui.View):
 		self.add_item(_ReturnButton(self.menu))
 		await interaction.response.edit_message(embed = embed, view = self)
 
+class _MessageAfterSettingsMenu(discord.ui.View):
+	async def update_message(self, interaction):
+		with open(files['channels'], 'r', encoding='utf-8') as file:
+			channels = json.load(file)
+
+		message_after = channels[str(interaction.guild.id)]['message_after']
+
+		message_after_list = {
+			'Delete' : language[LANG]["delete_message"],
+			'Edit' : language[LANG]["edit_message"],
+			'None' : language[LANG]["none_message"]
+		}
+
+		message_after_select = discord.ui.Select(
+			options = [
+				discord.SelectOption(
+					label = str(value),
+					value = str(key)
+				) for key, value in message_after_list.items()
+			],
+			placeholder = language[LANG]["choose_message"],
+		)
+
+		message_after_name = message_after_list[message_after]
+		self.last_mode = message_after_name
+		embed = discord.Embed()
+		embed.title = language[LANG]["settings_message"]
+		embed.add_field(name = f'{language[LANG]["current_message_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = self.last_mode, inline = False)
+		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
+		embed.colour = discord.Color.green()
+		embed.timestamp = dt.now(timezone('UTC'))
+
+		async def select_callback(interaction: discord.Interaction):
+			message_after_name_new = message_after_list[str(message_after_select.values[0])]
+			embed.clear_fields()
+			embed.add_field(name = f'{language[LANG]["current_message_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = message_after_name_new, inline = False)
+			embed.add_field(name = f'{language[LANG]["last_message"]}', value = self.last_mode, inline = False)
+			self.last_mode = message_after_name_new
+			with open(files['channels'], 'w', encoding='utf-8') as file:
+				channels[str(interaction.guild_id)] = {
+					'channel': str(channels[str(interaction.guild_id)]['channel']),
+					'status': str(channels[str(interaction.guild_id)]['status']),
+					'role': str(channels[str(interaction.guild_id)]['role']),
+					'message_after': str(message_after_select.values[0]),
+					'games': channels[str(interaction.guild_id)]['games'],
+				}
+
+				json.dump(channels, file, ensure_ascii=False, indent=4)
+
+			await interaction.response.edit_message(embed = embed, view = self)
+	
+		message_after_select.callback = select_callback
+
+		self.add_item(message_after_select)
+		self.add_item(_ReturnButton(self.menu))
+		await interaction.response.edit_message(embed = embed, view = self)
+
 class _StatusSettingsButton(discord.ui.Button):
 	def __init__(self, view, interaction):
 		with open(files['channels'], 'r', encoding='utf-8') as file:
@@ -678,7 +740,7 @@ class _StatusSettingsButton(discord.ui.Button):
 		self.menu = view
 		self.interaction = interaction
 		super().__init__(
-			label = 'Start Bot' if channels[str(self.interaction.guild_id)]['status'] == 'False' else 'Stop Bot',
+			label = language[LANG]["bot_start"] if channels[str(self.interaction.guild_id)]['status'] == 'False' else language[LANG]["bot_stop"],
 			style = discord.ButtonStyle.success if channels[str(self.interaction.guild_id)]['status'] == 'False' else discord.ButtonStyle.danger,
 			row = 1,
 		)
@@ -692,14 +754,14 @@ class _StatusSettingsButton(discord.ui.Button):
 				'channel': str(channels[str(interaction.guild_id)]['channel']),
 				'status': str(True) if channels[str(interaction.guild_id)]['status'] == 'False' else str(False),
 				'role': str(channels[str(interaction.guild_id)]['role']),
-				'need_delete': str(channels[str(interaction.guild_id)]['need_delete']),
+				'message_after': str(channels[str(interaction.guild_id)]['message_after']),
 				'games': channels[str(interaction.guild_id)]['games'],
 			}
 
 			json.dump(channels, file, ensure_ascii=False, indent=4)
 
 		self.menu.remove_item(self)
-		self.label = 'Start Bot' if channels[str(interaction.guild_id)]['status'] == 'False' else 'Stop Bot'
+		self.label = language[LANG]["bot_start"] if channels[str(interaction.guild_id)]['status'] == 'False' else language[LANG]["bot_stop"]
 		self.style = style = discord.ButtonStyle.success if channels[str(self.interaction.guild_id)]['status'] == 'False' else discord.ButtonStyle.danger
 		self.menu.add_item(self)
 		await interaction.response.edit_message(content = '', embed = await embedSettignsMenu(interaction), view = self.menu)
@@ -717,13 +779,13 @@ class _SettingsMenu(discord.ui.View):
 
 	@discord.ui.button(
 		style = discord.ButtonStyle.primary,
-		label = 'Setup Channel',
-		row = 1,
+		label = language[LANG]["channel_setup"],
+		row = 0,
 	)
 	async def channel_settings(self, interaction: discord.Interaction, button):
 		check_channels = [text.id for text in interaction.guild.text_channels]
 		if len(check_channels) == 0:
-			await interaction.response.send_message('No text channels in this guild', ephemeral = True)
+			await interaction.response.send_message(language[LANG]["no_channels_guild"], ephemeral = True)
 			return
 
 		channel_menu = _ChannelSettingsMenu()
@@ -731,36 +793,24 @@ class _SettingsMenu(discord.ui.View):
 		await channel_menu.update_message(interaction)
 
 	@discord.ui.button(
-		style = discord.ButtonStyle.secondary,
-		label = 'Change Delete/Edit setting',
+		style = discord.ButtonStyle.primary,
+		label = language[LANG]["message_setup"],
 		row = 0,
 	)
 	async def need_delete_settings(self, interaction: discord.Interaction, button):
-		with open(files['channels'], 'r', encoding='utf-8') as file:
-			channels = json.load(file)
-
-		with open(files['channels'], 'w', encoding='utf-8') as file:
-			channels[str(interaction.guild_id)] = {
-				'channel': str(channels[str(interaction.guild_id)]['channel']),
-				'status': str(channels[str(interaction.guild_id)]['status']),
-				'role': str(channels[str(interaction.guild_id)]['role']),
-				'need_delete': str(True) if channels[str(interaction.guild_id)]['need_delete'] == 'False' else str(False),
-				'games': channels[str(interaction.guild_id)]['games'],
-			}
-
-			json.dump(channels, file, ensure_ascii=False, indent=4)
-
-		await self.update_message(interaction)
+		message_menu = _MessageAfterSettingsMenu()
+		message_menu.menu = self
+		await message_menu.update_message(interaction)
 
 	@discord.ui.button(
 		style = discord.ButtonStyle.primary,
-		label = 'Choose role',
+		label = language[LANG]["role_setup"],
 		row = 0,
 	)
 	async def everyone_settings(self, interaction: discord.Interaction, button):
 		check_roles = [role_.id for role_ in interaction.guild.roles]
 		if len(check_roles) == 0:
-			await interaction.response.send_message('No roles in this guild', ephemeral = True)
+			await interaction.response.send_message(language[LANG]["no_roles_guild"], ephemeral = True)
 			return
 
 		role_menu = _RoleSettingsMenu()
@@ -784,7 +834,7 @@ class _SettingsMenu(discord.ui.View):
 
 	@discord.ui.button(
 		style = discord.ButtonStyle.danger,
-		label = 'Reset Settings',
+		label = language[LANG]["reset"],
 		row = 1,
 	)
 	async def reset_settings(self, interaction: discord.Interaction, button):
@@ -793,7 +843,7 @@ class _SettingsMenu(discord.ui.View):
 		_return = _ReturnButton(self)
 		view.add_item(_return)
 		await interaction.response.edit_message(
-			content = 'You really want reset all settings for bot on this server?',
+			content = language[LANG]["message_reset"],
 			embed = None,
 			view = view
 		)
@@ -815,7 +865,7 @@ class _ChangeMessageModal(discord.ui.Modal):
 		self.embed = embed
 		self.message = message
 		self.game_id = game_id
-		super().__init__(title = 'Message Editor')
+		super().__init__(title = language[LANG]["fix_message_editor"])
 
 	async def on_submit(self, interaction: discord.Interaction):
 		options = self.game
@@ -824,19 +874,19 @@ class _ChangeMessageModal(discord.ui.Modal):
 				if _input.custom_id == 'key':
 					if _input.value != 'ru':
 						if _input.value != 'not_ru':
-							await interaction.response.send_message(content = 'You change \'key\', but it\'s  not \'ru\' or \'not_ru\'', ephemeral = True)
+							await interaction.response.send_message(content = language[LANG]["fix_message_error_key"], ephemeral = True)
 							return
 				options[str(_input.custom_id)] = str(_input.value)
 		
 		self.embed.title = options['title']
 		price = options['price']
-		self.embed.set_field_at(0, name = f'Цена игры ({price})', value = options['description'], inline = False)
+		self.embed.set_field_at(0, name = f'{language[LANG]["game_price"]} ({price})', value = options['description'], inline = False)
 
-		label = '(Не для RU аккаунта)' if options['key'] == 'not_ru' else ''
+		label = f'{language[LANG]["not_ru_akk"]}' if options['key'] == 'not_ru' else ''
 
 		view = discord.ui.View()
 		view.add_item(discord.ui.Button(
-			label = f'Ссылка на раздачу {label}',
+			label = f'{language[LANG]["game_link"]} {label}',
 			style = discord.ButtonStyle.success,
 			url = options['url'],
 			emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
@@ -844,7 +894,7 @@ class _ChangeMessageModal(discord.ui.Modal):
 		))
 
 		button_confirm = discord.ui.Button(
-			label = f'Apply changes',
+			label = language[LANG]["fix_message_apply"],
 			style = discord.ButtonStyle.success,
 			disabled = False,
 		)
@@ -860,7 +910,7 @@ class _ChangeMessageModal(discord.ui.Modal):
 					'channel': channels[str(interaction.guild.id)]['channel'],
 					'status': channels[str(interaction.guild.id)]['status'],
 					'role': channels[str(interaction.guild.id)]['role'],
-					'need_delete': channels[str(interaction.guild.id)]['need_delete'],
+					'message_after': channels[str(interaction.guild.id)]['message_after'],
 					'games': games,
 				}
 
@@ -868,7 +918,7 @@ class _ChangeMessageModal(discord.ui.Modal):
 
 			view.clear_items()
 			view.add_item(discord.ui.Button(
-				label = f'Ссылка на раздачу {label}',
+				label = f'{language[LANG]["game_link"]} {label}',
 				style = discord.ButtonStyle.success,
 				url = options['url'],
 				emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
@@ -877,7 +927,7 @@ class _ChangeMessageModal(discord.ui.Modal):
 
 			await self.message.edit(embed = self.embed, view = view)
 			await interaction.response.edit_message(
-				content = 'Message was edited',
+				content = language[LANG]["fix_message_edit_successful"],
 				view = None,
 				embed = None
 			)
@@ -885,14 +935,14 @@ class _ChangeMessageModal(discord.ui.Modal):
 		button_confirm.callback = button_confirm_callback
 
 		button_cancel = discord.ui.Button(
-			label = f'Discard changes',
+			label = language[LANG]["fix_message_discard"],
 			style = discord.ButtonStyle.danger,
 			disabled = False,
 		)
 
 		async def button_cancel_callback(interaction: discord.Interaction):
 			await interaction.response.edit_message(
-				content = 'Message edit was discard',
+				content = language[LANG]["fix_message_edit_discard"],
 				view = None,
 				embed = None
 			)
@@ -902,14 +952,14 @@ class _ChangeMessageModal(discord.ui.Modal):
 		view.add_item(button_cancel)
 
 		await interaction.response.edit_message(
-			content = 'How it will be view',
+			content = language[LANG]["fix_message_how_view"],
 			view = view,
 			embed = self.embed,
 		)
 
-class _SubmitMessageModal(discord.ui.Modal, title = 'Submit for delete message: write \'SUBMIT\''):
+class _SubmitMessageModal(discord.ui.Modal, title = language[LANG]["fix_message_delete_modal"]):
 	check = discord.ui.TextInput(
-		label = 'Submit reset',
+		label = language[LANG]["fix_message_delete_submit"],
 		style = discord.TextStyle.short,
 		placeholder = 'SUBMIT',
 		required = False,
@@ -918,7 +968,7 @@ class _SubmitMessageModal(discord.ui.Modal, title = 'Submit for delete message: 
 	async def on_submit(self, interaction: discord.Interaction):
 		if self.check.value != 'SUBMIT': 
 			await interaction.response.edit_message(
-				content = 'Message don\'t deleted!',
+				content = language[LANG]["fix_message_delete_error"],
 				embed = None,
 				view = None,
 			)
@@ -935,7 +985,7 @@ class _SubmitMessageModal(discord.ui.Modal, title = 'Submit for delete message: 
 				'channel': channels[str(interaction.guild.id)]['channel'],
 				'status': channels[str(interaction.guild.id)]['status'],
 				'role': channels[str(interaction.guild.id)]['role'],
-				'need_delete': channels[str(interaction.guild.id)]['need_delete'],
+				'message_after': channels[str(interaction.guild.id)]['message_after'],
 				'games': games,
 			}
 
@@ -944,7 +994,7 @@ class _SubmitMessageModal(discord.ui.Modal, title = 'Submit for delete message: 
 		await self.message.delete()
 
 		await interaction.response.edit_message(
-			content = 'Message was deleted!',
+			content = language[LANG]["fix_message_delete_successful"],
 			embed = None,
 			view = None,
 		)
@@ -965,24 +1015,24 @@ async def fix_message(interaction: discord.Interaction):
 					value = str(key),
 				) for key, message in games.items() if message['deleted'] != 'True'
 			],
-			placeholder = f'Choose the message, what you want change',
+			placeholder = language[LANG]["fix_message_choose"],
 		)
 		async def select_callback(interaction: discord.Interaction):
 			channel = bot.get_channel(int(channels[str(interaction.guild.id)]['games'][str(channel_select.values[0])]['channel_id']))
 			try:
 				message = await channel.fetch_message(int(channels[str(interaction.guild.id)]['games'][str(channel_select.values[0])]['message_id']))
 			except Exception as e:
-				await interaction.response.send_message(content = 'Message is not exists', ephemeral = True)
+				await interaction.response.send_message(content = language[LANG]["fix_message_message_not_exists"], ephemeral = True)
 			else:
 				embed = message.embeds[0]
 				game = channels[str(interaction.guild.id)]['games'][str(channel_select.values[0])]['game_info']
 				game_id = str(channel_select.values[0])
 
-				label = '(Не для RU аккаунта)' if game['key'] == 'not_ru' else ''
+				label = language[LANG]["not_ru_akk"] if game['key'] == 'not_ru' else ''
 				
 				view = discord.ui.View()
 				view.add_item(discord.ui.Button(
-					label = f'Ссылка на раздачу {label}',
+					label = f'{language[LANG]["game_link"]} {label}',
 					style = discord.ButtonStyle.success,
 					url = game['url'],
 					emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
@@ -990,7 +1040,7 @@ async def fix_message(interaction: discord.Interaction):
 				))
 
 				button_change = discord.ui.Button(
-					label = f'Change message',
+					label = language[LANG]["fix_message_change_message"],
 					style = discord.ButtonStyle.primary,
 					disabled = False,
 				)
@@ -998,11 +1048,11 @@ async def fix_message(interaction: discord.Interaction):
 				async def button_change_callback(interaction: discord.Interaction):
 					modal = _ChangeMessageModal(game, embed, message, game_id)
 					labels = {
-						'title': 'Title of Game',
-	                    'description': 'Description of Game',
-	                    'url': 'URL of Game',
-	                    'price': 'Price of Game',
-	                    'key': 'Key of Game : JUST \'ru\' or \'not_ru\'',
+						'title': language[LANG]["fix_message_modal_title"],
+	                    'description': language[LANG]["fix_message_modal_description"],
+	                    'url': language[LANG]["fix_message_modal_url"],
+	                    'price': language[LANG]["fix_message_modal_price"],
+	                    'key': language[LANG]["fix_message_modal_key"],
 					}
 					for key, value in game.items():
 						check = discord.ui.TextInput(
@@ -1021,7 +1071,7 @@ async def fix_message(interaction: discord.Interaction):
 				button_change.callback = button_change_callback
 
 				button_delete = discord.ui.Button(
-					label = f'Delete message',
+					label = language[LANG]["fix_message_button_delete"],
 					style = discord.ButtonStyle.danger,
 					disabled = False,
 				)
@@ -1039,7 +1089,7 @@ async def fix_message(interaction: discord.Interaction):
 				view.add_item(button_delete)
 
 				await interaction.response.edit_message(
-					content = 'How it view now', 
+					content = language[LANG]["fix_message_how_view_now"], 
 					embed = embed, 
 					view = view,
 				)
@@ -1049,7 +1099,7 @@ async def fix_message(interaction: discord.Interaction):
 
 	options_check = [key for key, message in games.items() if message['deleted'] != 'True']
 	if len(options_check) == 0:
-		await interaction.response.send_message('There are no messages with an existing giveaway', ephemeral = True)
+		await interaction.response.send_message(language[LANG]["fix_message_no_messages"], ephemeral = True)
 		return
 
 	view = discord.ui.View()
@@ -1057,10 +1107,10 @@ async def fix_message(interaction: discord.Interaction):
 	await interaction.response.send_message(view = view, ephemeral = True)
 
 
-@bot.tree.command(name='send_to_channel')
+@bot.tree.command(name='dev_send_to_channel')
 @app_commands.guild_only()
-@in_list_users()
-async def send_to_channel(interaction: discord.Interaction, user: discord.Member):
+@is_owner()
+async def dev_send_to_channel(interaction: discord.Interaction, user: discord.Member):
 	channels = interaction.guild.voice_channels
 	view = discord.ui.View()
 	def select_channel():
@@ -1071,12 +1121,12 @@ async def send_to_channel(interaction: discord.Interaction, user: discord.Member
 					value = str(voice.id)
 				) for voice in channels
 			],
-			placeholder = f'Choose the channel, where you want send {user.name}',
+			placeholder = f'{language[LANG]["send_to_channel_choose"]} {user.name}',
 		)
 		async def select_callback(interaction: discord.Interaction):
 			if user.voice == None:
 				await interaction.response.send_message(
-					content=f'Sorry, {user.name} must be in the voice channel',
+					content=f'{language[LANG]["send_to_channel_sorry"]}, {user.name} {language[LANG]["send_to_channel_no_voice"]}',
 					ephemeral=True
 				)
 				return
@@ -1084,7 +1134,7 @@ async def send_to_channel(interaction: discord.Interaction, user: discord.Member
 			channel = bot.get_channel(int(channel_select.values[0]))
 			await user.move_to(channel)
 			await interaction.response.send_message(
-				content = f'{user.name} will be sent to **{channel.name}** channel.', 
+				content = f'{user.name} {language[LANG]["send_to_channel_will_be_sent"]} **{channel.name}** {language[LANG]["send_to_channel_channel"]}.', 
 				ephemeral = True,
 			)
 		
@@ -1094,7 +1144,7 @@ async def send_to_channel(interaction: discord.Interaction, user: discord.Member
 	def button_all_members():
 		button = discord.ui.Button(
 			style = discord.ButtonStyle.success,
-			label = 'Check members in all channel',
+			label = language[LANG]["send_to_channel_check_all"],
 			emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
 		)
 		async def btn_callback(interaction: discord.Interaction):
@@ -1102,7 +1152,7 @@ async def send_to_channel(interaction: discord.Interaction, user: discord.Member
 			for channel in channels:
 				members = [str(m.name) for m in channel.members]
 				embed.add_field(
-					name = f'{channel.name} : ({len(members)} users)',
+					name = f'{channel.name} : ({len(members)} {language[LANG]["precense_users"]})',
 					value = ', '.join(members) if len(members) != 0 else '---',
 					inline = False,
 				)
@@ -1241,9 +1291,13 @@ async def send_to_channel(interaction: discord.Interaction, user: discord.Member
 
 @bot.tree.command(name='give_permissions')
 @app_commands.guild_only()
-@app_commands.describe(boolean = 'True - give permissions | False : take permissions')
+@app_commands.describe(boolean = language[LANG]["give_permissions_describe"])
 @is_owner()
 async def give_permissions(interaction: discord.Interaction, user: discord.Member, boolean: bool):
+	if user.bot:
+		await interaction.response.send_message(content = f'{language[LANG]["give_permissions_error_bot"]}', ephemeral = True)
+		return
+		
 	with open(files['users'], 'r', encoding='utf-8') as file:
 		data = json.load(file)
 
@@ -1257,7 +1311,7 @@ async def give_permissions(interaction: discord.Interaction, user: discord.Membe
 
 		json.dump(data, file, ensure_ascii=False, indent=4)
 
-	await interaction.response.send_message(content = f'All ready! {interaction.user.mention}! {user.name} now has a new status : {boolean}.', ephemeral = True)
+	await interaction.response.send_message(content = f'{language[LANG]["give_permissions_all_ready"]}! {user.name} {language[LANG]["give_permissions_new_status"]} : {boolean}.', ephemeral = True)
 
 # @set_channel.error
 # async def set_channel_error(interaction: discord.Interaction, error):
@@ -1287,17 +1341,23 @@ async def give_permissions(interaction: discord.Interaction, user: discord.Membe
 @dev_test.error
 async def dev_test_error(interaction: discord.Interaction, error):
 	if isinstance(error, app_commands.errors.CheckFailure):
-		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
+		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
+	else:
+		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
 
 @give_permissions.error
 async def give_permissions_error(interaction: discord.Interaction, error):
 	if isinstance(error, app_commands.errors.CheckFailure):
-		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
+		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
+	else:
+		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
 
-@send_to_channel.error
-async def send_to_channel_error(interaction: discord.Interaction, error):
+@dev_send_to_channel.error
+async def dev_send_to_channel_error(interaction: discord.Interaction, error):
 	if isinstance(error, app_commands.errors.CheckFailure):
-		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
+		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
+	else:
+		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
 
 # @reset_settings.error
 # async def reset_settings_error(interaction: discord.Interaction, error):
@@ -1306,16 +1366,17 @@ async def send_to_channel_error(interaction: discord.Interaction, error):
 
 @settings.error
 async def settings_error(interaction: discord.Interaction, error):
-	print(error)
 	if isinstance(error, app_commands.errors.CheckFailure):
-		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
+		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
+	else:
+		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
 
 @fix_message.error
 async def fix_message_error(interaction: discord.Interaction, error):
-	#print(error)
 	if isinstance(error, app_commands.errors.CheckFailure):
-		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
-
+		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
+	else:
+		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
 
 load_dotenv(find_dotenv())
 

@@ -4,6 +4,7 @@ import json
 from datetime import timedelta
 from datetime import datetime as dt
 from python_translator import Translator
+from language import LANG
 
 file_name = 'games.json'
 
