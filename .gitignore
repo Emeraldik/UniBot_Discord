@@ -12,3 +12,4 @@
 .env
 *.json
 *.pyc
+*.log

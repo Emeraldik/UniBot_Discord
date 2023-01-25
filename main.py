@@ -13,17 +13,28 @@ import json
 import game_informer
 from language import language, LANG
 
+from loguru import logger
+
+load_dotenv(find_dotenv())
+
 files = {
 	'users': 'users.json', 
 	'channels': 'channels.json',
 	'games': 'games.json',
 }
 
+ownerID = os.environ['ownerID']
+
 users = {
-	'303498186708746240',
+	ownerID,
 }
 
-ownerID = 303498186708746240
+logger.add('logger.log', 
+	format='{time} {level} {message}', 
+	level = 'DEBUG', 
+	rotation = '1 week', 
+	compression = 'zip'
+)
 
 bot = commands.Bot(command_prefix='.', intents=discord.Intents.all())
 
@@ -47,6 +58,7 @@ async def on_ready():
 				file.write('{}')
 
 	print(f'Discord Bot {bot.user} is ready!')
+	logger.debug(f'Discord Bot {bot.user} is ready!')
 	
 	for guild in bot.guilds:
 		data_members = {}
@@ -94,6 +106,7 @@ async def on_ready():
 	try:
 		synced = await bot.tree.sync()
 		print(f'All is right. Synced {len(synced)} commands')
+		logger.debug(f'All is right. Synced {len(synced)} commands')
 	except Exception as e:
 		print(e)
 
@@ -144,6 +157,8 @@ async def on_guild_join(guild):
 
 		json.dump(data, file, ensure_ascii=False, indent=4)
 
+	logger.debug(f'Bot joined to new guild : {guild.name}')
+
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
 		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"]} ({len(bot.users)} {language[LANG]["precense_users"]})',
@@ -165,6 +180,8 @@ async def on_guild_remove(guild):
 
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 	
+	logger.debug(f'Bot leave/kicked from guild : {guild.name}')
+
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
 		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"]} ({len(bot.users)} {language[LANG]["precense_users"]})',
@@ -185,6 +202,8 @@ async def on_member_join(member):
 			data[str(member.guild.id)] = data_members
 
 		json.dump(data, file, ensure_ascii=False, indent=4)
+
+	logger.debug(f'New member : {member.name} in guild : {member.guild.name}')
 
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
@@ -226,6 +245,7 @@ async def bot_loop_delete_message():
 		if len(check['games']) != 0:
 			for key, game in check['games'].items():
 				if game['deleted'] != 'True':
+					logger.info(f'Start bot_loop_delete_message || Game : {game["game_info"]["title"]} || Guild : {guild.name}')
 					timenow = dt.utcnow()
 					date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
 					if date_end < timenow:
@@ -289,6 +309,7 @@ async def bot_loop_delete_message():
 						
 @tasks.loop(minutes=5.0, reconnect=True)
 async def bot_loop():
+	logger.info(f'Start bot_loop and function check_games')
 	game_informer.check_games()
 
 	with open(files['channels'], 'r', encoding='utf-8') as file:
@@ -368,6 +389,8 @@ async def bot_loop():
 							'message_after': str(check['message_after']),
 							'games': games_channel,
 						}
+
+						logger.info(f'Game : {game["title"]} was posted in {guild.name}')
 
 	with open(files['channels'], 'w', encoding='utf-8') as file:
 		json.dump(channels, file, ensure_ascii=False, indent=4)
@@ -496,6 +519,8 @@ class _SubmitModal(discord.ui.Modal, title = language[LANG]["reset_submit_modal"
 				content = language[LANG]["reset_canceled"],
 			 	view = self.view
 			)
+
+			logger.warning(f'Reset was discarded in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id})')
 			return
 
 		with open(files['channels'], 'r', encoding='utf-8') as file:
@@ -520,6 +545,8 @@ class _SubmitModal(discord.ui.Modal, title = language[LANG]["reset_submit_modal"
 			content = language[LANG]["reset_successful"],
 		 	view = self.view
 		)
+
+		logger.info(f'Reset was successfuled in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id})')
 
 class _ResetMenu(discord.ui.View):
 	def __init__(self):
@@ -586,6 +613,9 @@ class _ChannelSettingsMenu(discord.ui.View):
 			embed.clear_fields()
 			embed.add_field(name = f'{language[LANG]["current_channel_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = channel_new.name, inline = False)
 			embed.add_field(name = f'{language[LANG]["last_channel"]}', value = self.last_channel, inline = False)
+			
+			logger.info(f'Channel was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({self.last_channel} -> {channel_new.name})')
+			
 			self.last_channel = channel_new.name
 			with open(files['channels'], 'w', encoding='utf-8') as file:
 				channels[str(interaction.guild_id)] = {
@@ -599,7 +629,7 @@ class _ChannelSettingsMenu(discord.ui.View):
 				json.dump(channels, file, ensure_ascii=False, indent=4)
 
 			await interaction.response.edit_message(embed = embed, view = self)
-	
+
 		channel_select.callback = select_callback
 
 		self.add_item(channel_select)
@@ -656,6 +686,9 @@ class _RoleSettingsMenu(discord.ui.View):
 			embed.clear_fields()
 			embed.add_field(name = f'{language[LANG]["current_role_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = role_new_name, inline = False)
 			embed.add_field(name = f'{language[LANG]["last_role"]}', value = self.last_role, inline = False)
+			
+			logger.info(f'Role was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({self.last_role} -> {role_new_name})')
+			
 			self.last_role = role_new_name
 			with open(files['channels'], 'w', encoding='utf-8') as file:
 				channels[str(interaction.guild_id)] = {
@@ -713,6 +746,9 @@ class _MessageAfterSettingsMenu(discord.ui.View):
 			embed.clear_fields()
 			embed.add_field(name = f'{language[LANG]["current_message_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = message_after_name_new, inline = False)
 			embed.add_field(name = f'{language[LANG]["last_message"]}', value = self.last_mode, inline = False)
+			
+			logger.info(f'MessageAfter was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({self.last_mode} -> {message_after_name_new})')
+			
 			self.last_mode = message_after_name_new
 			with open(files['channels'], 'w', encoding='utf-8') as file:
 				channels[str(interaction.guild_id)] = {
@@ -764,7 +800,13 @@ class _StatusSettingsButton(discord.ui.Button):
 		self.label = language[LANG]["bot_start"] if channels[str(interaction.guild_id)]['status'] == 'False' else language[LANG]["bot_stop"]
 		self.style = style = discord.ButtonStyle.success if channels[str(self.interaction.guild_id)]['status'] == 'False' else discord.ButtonStyle.danger
 		self.menu.add_item(self)
+
+		logger.info(f'Bot status was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({channels[str(interaction.guild_id)]["status"] == "False"} -> {channels[str(interaction.guild_id)]["status"] == "True"})')
+
 		await interaction.response.edit_message(content = '', embed = await embedSettignsMenu(interaction), view = self.menu)
+
+			
+
 
 class _SettingsMenu(discord.ui.View):
 	def __init__(self):
@@ -931,6 +973,7 @@ class _ChangeMessageModal(discord.ui.Modal):
 				view = None,
 				embed = None
 			)
+			logger.info(f'Fix_Message : message was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({games[str(self.game_id)]["game_info"]["title"]})')
 
 		button_confirm.callback = button_confirm_callback
 
@@ -998,6 +1041,8 @@ class _SubmitMessageModal(discord.ui.Modal, title = language[LANG]["fix_message_
 			embed = None,
 			view = None,
 		)
+
+		logger.warning(f'Fix_Message : message was deleted in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({games[str(self.game_id)]["game_info"]["title"]})')
 
 @bot.tree.command(name='fix_message')
 @app_commands.guild_only()
@@ -1377,7 +1422,5 @@ async def fix_message_error(interaction: discord.Interaction, error):
 		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
 	else:
 		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
-
-load_dotenv(find_dotenv())
 
 bot.run(os.environ['TOKEN'])

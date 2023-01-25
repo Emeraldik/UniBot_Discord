@@ -1,10 +1,12 @@
 import requests
 import os
 import json
-from datetime import timedelta
+#from datetime import timedelta
 from datetime import datetime as dt
-from python_translator import Translator
+from deep_translator import GoogleTranslator
+
 from language import LANG
+
 
 file_name = 'games.json'
 
@@ -12,6 +14,8 @@ APIs = {
 	'not_ru': 'https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=ru-RU',
 	'ru': 'https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=ru-RU&country=RU',
 }
+
+translator = GoogleTranslator(source='auto', target=LANG)
 
 def check_games():
 	for key, api in APIs.items():
@@ -24,7 +28,6 @@ def check_new_games(key='ru', API='https://store-site-backend-static.ak.epicgame
 			file.write('{}')
 
 	api = str(API)
-	translator = Translator()
 	response = requests.get(api)
 
 	if response.status_code == 200:
@@ -97,7 +100,7 @@ def check_new_games(key='ru', API='https://store-site-backend-static.ak.epicgame
 					gm[str(game['id'])] = {
 						'id' : str(game['id']),
 						'title' : str(game['title']),
-						'description' : str(translator.translate(game['description'], 'russian', 'english')),
+						'description' : str(translator.translate(game['description'])),
 						'image' : str(game_image),
 						'url' : f'https://store.epicgames.com/en/p/{str(game_url)}',
 						'price' : str(game_price),

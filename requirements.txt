@@ -1,5 +1,6 @@
 discord
 requests
 python-dotenv
-python-translator
+deep_translator
 pytz
+loguru
