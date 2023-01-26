@@ -112,7 +112,7 @@ async def on_ready():
 
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
-		name = f'{len(bot.guilds)} servers ({len(bot.users)} users)',
+		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"][str(len(bot.guilds) % 10)]} ({len(bot.users)} {language[LANG]["precense_users"]})',
 	))
 
 @bot.event
@@ -161,7 +161,7 @@ async def on_guild_join(guild):
 
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
-		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"]} ({len(bot.users)} {language[LANG]["precense_users"]})',
+		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"][str(len(bot.guilds) % 10)]} ({len(bot.users)} {language[LANG]["precense_users"]})',
 	))
 
 @bot.event
@@ -184,7 +184,7 @@ async def on_guild_remove(guild):
 
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
-		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"]} ({len(bot.users)} {language[LANG]["precense_users"]})',
+		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"][str(len(bot.guilds) % 10)]} ({len(bot.users)} {language[LANG]["precense_users"]})',
 	))
 
 @bot.event
@@ -207,14 +207,14 @@ async def on_member_join(member):
 
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
-		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"]} ({len(bot.users)} {language[LANG]["precense_users"]})',
+		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"][str(len(bot.guilds) % 10)]} ({len(bot.users)} {language[LANG]["precense_users"]})',
 	))
 
 @bot.event
 async def on_member_remove(member):
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
-		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"]} ({len(bot.users)} {language[LANG]["precense_users"]})',
+		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"][str(len(bot.guilds) % 10)]} ({len(bot.users)} {language[LANG]["precense_users"]})',
 	))
 
 @bot.event
@@ -234,6 +234,7 @@ async def on_user_update(before, after):
 
 @tasks.loop(minutes=10.0, reconnect=True)
 async def bot_loop_delete_message():
+	logger.info(f'Start bot_loop_delete_message')
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
 
@@ -245,7 +246,6 @@ async def bot_loop_delete_message():
 		if len(check['games']) != 0:
 			for key, game in check['games'].items():
 				if game['deleted'] != 'True':
-					logger.info(f'Start bot_loop_delete_message || Game : {game["game_info"]["title"]} || Guild : {guild.name}')
 					timenow = dt.utcnow()
 					date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
 					if date_end < timenow:
@@ -287,7 +287,9 @@ async def bot_loop_delete_message():
 									embed = embed,
 									view = button,
 								)
-
+						finally:
+							logger.info(f'Start bot_loop_delete_message || Game : {game["game_info"]["title"]} || Guild : {guild.name}')
+							
 							check['games'][str(key)] = {
 								'date_end': str(game['date_end']),
 								'message_id': str(game['message_id']),

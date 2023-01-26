@@ -1,7 +1,6 @@
 import requests
 import os
 import json
-#from datetime import timedelta
 from datetime import datetime as dt
 from deep_translator import GoogleTranslator
 
@@ -67,7 +66,7 @@ def check_new_games(key='ru', API='https://store-site-backend-static.ak.epicgame
 						game_url = game['offerMappings'][0]['pageSlug']
 
 					game_price = game['price']['totalPrice']['fmtPrice']['originalPrice']
-
+					game_price_new = game['price']['totalPrice']['fmtPrice']['discountPrice']
 					game_promotions = game['promotions']['promotionalOffers']
 					upcoming_promotions = game['promotions']['upcomingPromotionalOffers']
 
@@ -75,20 +74,15 @@ def check_new_games(key='ru', API='https://store-site-backend-static.ak.epicgame
 						# Promotion is active.
 						date_start = dt.strptime(game_promotions[0]['promotionalOffers'][0]['startDate'], "%Y-%m-%dT%H:%M:%S.%fZ")
 						date_end = dt.strptime(game_promotions[0]['promotionalOffers'][0]['endDate'], "%Y-%m-%dT%H:%M:%S.%fZ")
-						# date_start += timedelta(seconds=(3600*3))
-						# date_end += timedelta(seconds=(3600*3))
 					elif not game_promotions and upcoming_promotions:
 						# Promotion is not active yet, but will be active soon.
 						date_start = dt.strptime(upcoming_promotions[0]['promotionalOffers'][0]['startDate'], "%Y-%m-%dT%H:%M:%S.%fZ")
 						date_end = dt.strptime(upcoming_promotions[0]['promotionalOffers'][0]['endDate'], "%Y-%m-%dT%H:%M:%S.%fZ")
-						# date_start += timedelta(seconds=(3600*3))
-						# date_end += timedelta(seconds=(3600*3))
+						game_price_new = '0'
 					elif game_promotions:
 						# Promotion is active.
 						date_start = dt.strptime(game_promotions[0]['promotionalOffers'][0]['startDate'], "%Y-%m-%dT%H:%M:%S.%fZ")
-						date_end = dt.strptime(game_promotions[0]['promotionalOffers'][0]['endDate'], "%Y-%m-%dT%H:%M:%S.%fZ")
-						# date_start += timedelta(seconds=(3600*3))
-						# date_end += timedelta(seconds=(3600*3))
+						date_end = dt.strptime(game_promotions[0]['promotionalOffers'][0]['endDate'], "%Y-%m-%dT%H:%M:%S.%fZ")	
 					else:
 						date_start = ''
 						date_end = ''
@@ -97,20 +91,21 @@ def check_new_games(key='ru', API='https://store-site-backend-static.ak.epicgame
 				except Exception as e:
 					print(e)
 				else:
-					gm[str(game['id'])] = {
-						'id' : str(game['id']),
-						'title' : str(game['title']),
-						'description' : str(translator.translate(game['description'])),
-						'image' : str(game_image),
-						'url' : f'https://store.epicgames.com/en/p/{str(game_url)}',
-						'price' : str(game_price),
-						'date_end' : str(date_end),
-						'days_left' : str(date_end - timenow) if date_end != '' else '',
-						'days_left_seconds': str((date_end - timenow).total_seconds()) if date_end != '' else '',
-						'started' : str(date_start < timenow) if date_start != '' else None,
-						'expired' : str(date_end < timenow) if date_end != '' else None,
-						'key': str(key),
-					}
+					if game_price_new == '0':
+						gm[str(game['id'])] = {
+							'id' : str(game['id']),
+							'title' : str(game['title']),
+							'description' : str(translator.translate(game['description'])),
+							'image' : str(game_image),
+							'url' : f'https://store.epicgames.com/en/p/{str(game_url)}',
+							'price' : str(game_price),
+							'date_end' : str(date_end),
+							'days_left' : str(date_end - timenow) if date_end != '' else '',
+							'days_left_seconds': str((date_end - timenow).total_seconds()) if date_end != '' else '',
+							'started' : str(date_start < timenow) if date_start != '' else None,
+							'expired' : str(date_end < timenow) if date_end != '' else None,
+							'key': str(key),
+						}
 				finally:
 					json.dump(gm, file, ensure_ascii=False, indent=4)
 

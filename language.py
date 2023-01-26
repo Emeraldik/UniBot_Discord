@@ -3,7 +3,18 @@ language = {}
 LANG = 'ru'
 
 language['en'] = {
-    "precense_servers": "servers",
+    "precense_servers": {
+	    '0' : "servers",
+	    '1' : "servers",
+	    '2' : "servers",
+	    '3' : "servers",
+	    '4' : "servers",
+	    '5' : "servers",
+	    '6' : "servers",
+	    '7' : "servers",
+	    '8' : "servers",
+	    '9' : "servers",
+	},
     "precense_users": "users",
     "game_price": "Game price",
     "discount_ended": "Promotion ended",
@@ -93,8 +104,19 @@ language['en'] = {
 }
 
 language['ru'] = {
-	'precense_servers' : 'сервера',
-	'precense_users' : 'человек',
+	"precense_servers": {
+	    '0' : "серверов",
+	    '1' : "сервер",
+	    '2' : "сервера",
+	    '3' : "сервера",
+	    '4' : "сервера",
+	    '5' : "серверов",
+	    '6' : "серверов",
+	    '7' : "серверов",
+	    '8' : "серверов",
+	    '9' : "серверов",
+	},
+	'precense_users' : 'чел',
 	'game_price' : 'Цена игры',
 	'discount_ended' : 'Акция закончилась',
 	'not_ru_akk' : '(Не для RU аккаунта)',
