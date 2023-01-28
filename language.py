@@ -100,7 +100,24 @@ language['en'] = {
     "give_permissions_new_status": "Gets a new status",
     "give_permissions_error_bot": "Error : Cannot give or take away bot powers to use UniBot",
     "dont_have_permissions": "You do not have sufficient permissions to use this command",
-    "something_went_wrong": "Oops... An error has occurred! If you have the opportunity, write to the developer, preferably describe the circumstances under which the error occurred."
+    "something_went_wrong": "Oops... An error has occurred! If you have the opportunity, write to the developer, preferably describe the circumstances under which the error occurred.",
+    'bot_latency' : 'Bot latency',
+   	'help_title' : 'Command help menu',
+	'help_footer' : 'Commands available to users | All commands work within communities',
+	'help_commands' : {
+		'settings' : {
+			'name' : 'settings',
+			'description' : '(Command is available to users with the \'Manage channels\' permission)\nBot settings for the community from which the command was called.',
+		},
+		'fix_message' : {
+			'name' : 'fix_message',
+			'description' : '(Command is available to users with the \'Manage channels\' permission)\nManage messages, with distributions that are still active. You can change the name / description / price / region of distribution / link to the game, as well as delete the message through the bot.',
+		},
+		'ping' : {
+			'name' : 'ping',
+			'description' : 'You can find out the current latency of the bot.',
+		}
+	}
 }
 
 language['ru'] = {
@@ -201,5 +218,22 @@ language['ru'] = {
 	'give_permissions_new_status' : 'Получает новый статус',
 	'give_permissions_error_bot' : 'Ошибка : нельзя наделить или забрать полномочия бота для использования UniBot',
 	'dont_have_permissions' : 'У вас недостаточно полномочий для использования этой команды',
-	'something_went_wrong' : 'Упс... Произошла ошибка! Если у вас есть возможность, напишите разработчику, желательно опишите, при каких обстоятельствах произошла ошибка.'
+	'something_went_wrong' : 'Упс... Произошла ошибка! Если у вас есть возможность, напишите разработчику, желательно опишите, при каких обстоятельствах произошла ошибка.',
+	'bot_latency' : 'Задержка бота',
+	'help_title' : 'Меню помощи по командам',
+	'help_footer' : 'Команды доступные пользователям | Все команды работают внутри сообществ',
+	'help_commands' : {
+		'settings' : {
+			'name' : 'settings',
+			'description' : '(Команда доступная для пользователей с правом \'Управлять каналами\')\nОсновные настройки бота для сообщества из которого вызвали команду.',
+		},
+		'fix_message' : {
+			'name' : 'fix_message',
+			'description' : '(Команда доступная для пользователей с правом \'Управлять каналами\')\nУправление сообщениями, с раздачами, которые всё ещё активны. Можно изменить название/описание/цену/регион раздачи/ссылку на игру, а также удалить сообщение, через бота.',
+		},
+		'ping' : {
+			'name' : 'ping',
+			'description' : 'Можно узнать текущую задержку бота.',
+		}
+	}
 }

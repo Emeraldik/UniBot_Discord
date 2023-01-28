@@ -36,11 +36,11 @@ logger.add('logger.log',
 	compression = 'zip'
 )
 
-bot = commands.Bot(command_prefix='.', intents=discord.Intents.all())
+bot = commands.Bot(command_prefix='.', intents=discord.Intents.all(), help_command = None)
 
 @bot.event
 async def setup_hook():
-	bot_loop.start()
+	bot_loop_send_message.start()
 	bot_loop_delete_message.start()
 
 @bot.event
@@ -72,12 +72,12 @@ async def on_ready():
 					if not str(guild.id) in data:
 						data_members[str(member.id)] = {
 							'name': str(member.name),
-							'has_permissions': str(True) if ((str(member.id) in users) or (member.id == ownerID)) else str(False),  
+							'has_permissions': str(True) if ((str(member.id) in users) or (str(member.id) == ownerID)) else str(False),  
 						}
 					elif not str(member.id) in data[str(guild.id)]:
 						data_members[str(member.id)] = {
 							'name': str(member.name),
-							'has_permissions': str(True) if ((str(member.id) in users) or (member.id == ownerID)) else str(False),  
+							'has_permissions': str(True) if ((str(member.id) in users) or (str(member.id) == ownerID)) else str(False),  
 						}
 					else:
 						data_members = data[str(guild.id)]
@@ -143,12 +143,12 @@ async def on_guild_join(guild):
 				if not str(guild.id) in data:
 					data_members[str(member.id)] = {
 						'name': str(member.name),
-						'has_permissions': str(True) if ((str(member.id) in users) or (member.id == ownerID)) else str(False),  
+						'has_permissions': str(True) if ((str(member.id) in users) or (str(member.id) == ownerID)) else str(False),  
 					}
 				elif not str(member.id) in data[str(guild.id)]:
 					data_members[str(member.id)] = {
 						'name': str(member.name),
-						'has_permissions': str(True) if ((str(member.id) in users) or (member.id == ownerID)) else str(False),  
+						'has_permissions': str(True) if ((str(member.id) in users) or (str(member.id) == ownerID)) else str(False),  
 					}
 				else:
 					data_members = data[str(guild.id)]
@@ -197,7 +197,7 @@ async def on_member_join(member):
 		if not str(member.id) in data_members:
 			data_members[str(member.id)] = {
 				'name': str(member.name),
-				'has_permissions': str(True) if ((str(member.id) in users) or (member.id == ownerID)) else str(False),  
+				'has_permissions': str(True) if ((str(member.id) in users) or (str(member.id) == ownerID)) else str(False),  
 			}
 			data[str(member.guild.id)] = data_members
 
@@ -310,8 +310,8 @@ async def bot_loop_delete_message():
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 						
 @tasks.loop(minutes=5.0, reconnect=True)
-async def bot_loop():
-	logger.info(f'Start bot_loop and function check_games')
+async def bot_loop_send_message():
+	logger.info(f'Start bot_loop_send_message and function check_games')
 	game_informer.check_games()
 
 	with open(files['channels'], 'r', encoding='utf-8') as file:
@@ -399,7 +399,7 @@ async def bot_loop():
 
 def is_owner():
 	def predicate(interaction: discord.Interaction) -> bool:
-		return interaction.user.id == ownerID
+		return str(interaction.user.id) == ownerID
 	return app_commands.check(predicate)
 
 def in_list_users():
@@ -411,7 +411,7 @@ def in_list_users():
 
 def has_channel_permissions():
 	def predicate(interaction: discord.Interaction) -> bool:
-		if interaction.user.id == ownerID:
+		if str(interaction.user.id) == ownerID:
 			return True
 
 		if interaction.user.guild_permissions.manage_channels:
@@ -1153,67 +1153,85 @@ async def fix_message(interaction: discord.Interaction):
 	view.add_item(select_channel())
 	await interaction.response.send_message(view = view, ephemeral = True)
 
+@bot.tree.command(name='help')
+async def help(interaction: discord.Interaction):
+	embed = discord.Embed()
+	embed.title = f'{language[LANG]["help_title"]}'
+	for _, com in language[LANG]['help_commands'].items():
+		embed.add_field(name = f'{com["name"]}', value = com["description"], inline = False)
+	embed.set_author(name = interaction.user.name, icon_url = interaction.user.display_avatar.url)
+	embed.set_footer(text = language[LANG]['help_footer'])
+	embed.colour = discord.Color.green()
+	embed.timestamp = dt.now(timezone('UTC'))
 
-@bot.tree.command(name='dev_send_to_channel')
-@app_commands.guild_only()
-@is_owner()
-async def dev_send_to_channel(interaction: discord.Interaction, user: discord.Member):
-	channels = interaction.guild.voice_channels
-	view = discord.ui.View()
-	def select_channel():
-		channel_select = discord.ui.Select(
-			options = [
-				discord.SelectOption(
-					label = voice.name,
-					value = str(voice.id)
-				) for voice in channels
-			],
-			placeholder = f'{language[LANG]["send_to_channel_choose"]} {user.name}',
-		)
-		async def select_callback(interaction: discord.Interaction):
-			if user.voice == None:
-				await interaction.response.send_message(
-					content=f'{language[LANG]["send_to_channel_sorry"]}, {user.name} {language[LANG]["send_to_channel_no_voice"]}',
-					ephemeral=True
-				)
-				return
+	await interaction.response.send_message(embed = embed, ephemeral = True)
 
-			channel = bot.get_channel(int(channel_select.values[0]))
-			await user.move_to(channel)
-			await interaction.response.send_message(
-				content = f'{user.name} {language[LANG]["send_to_channel_will_be_sent"]} **{channel.name}** {language[LANG]["send_to_channel_channel"]}.', 
-				ephemeral = True,
-			)
+@bot.tree.command(name='ping')
+async def ping(interaction: discord.Interaction):
+	await interaction.response.send_message(content = f'{language[LANG]["bot_latency"]} : {bot.latency}ms', ephemeral = True)
+
+# @bot.tree.command(name='dev_send_to_channel')
+# @app_commands.guild_only()
+# @is_owner()
+# async def dev_send_to_channel(interaction: discord.Interaction, user: discord.Member):
+# 	channels = interaction.guild.voice_channels
+# 	view = discord.ui.View()
+# 	def select_channel():
+# 		channel_select = discord.ui.Select(
+# 			options = [
+# 				discord.SelectOption(
+# 					label = voice.name,
+# 					value = str(voice.id)
+# 				) for voice in channels
+# 			],
+# 			placeholder = f'{language[LANG]["send_to_channel_choose"]} {user.name}',
+# 		)
+# 		async def select_callback(interaction: discord.Interaction):
+# 			if user.voice == None:
+# 				await interaction.response.send_message(
+# 					content=f'{language[LANG]["send_to_channel_sorry"]}, {user.name} {language[LANG]["send_to_channel_no_voice"]}',
+# 					ephemeral=True
+# 				)
+# 				return
+
+# 			channel = bot.get_channel(int(channel_select.values[0]))
+# 			await user.move_to(channel)
+# 			await interaction.response.send_message(
+# 				content = f'{user.name} {language[LANG]["send_to_channel_will_be_sent"]} **{channel.name}** {language[LANG]["send_to_channel_channel"]}.', 
+# 				ephemeral = True,
+# 			)
 		
-		channel_select.callback = select_callback
-		return channel_select
+# 		channel_select.callback = select_callback
+# 		return channel_select
 
-	def button_all_members():
-		button = discord.ui.Button(
-			style = discord.ButtonStyle.success,
-			label = language[LANG]["send_to_channel_check_all"],
-			emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
-		)
-		async def btn_callback(interaction: discord.Interaction):
-			embed = discord.Embed()
-			for channel in channels:
-				members = [str(m.name) for m in channel.members]
-				embed.add_field(
-					name = f'{channel.name} : ({len(members)} {language[LANG]["precense_users"]})',
-					value = ', '.join(members) if len(members) != 0 else '---',
-					inline = False,
-				)
-			await interaction.response.send_message(embed = embed, ephemeral = True)
-		button.callback = btn_callback
-		return button
+# 	def button_all_members():
+# 		button = discord.ui.Button(
+# 			style = discord.ButtonStyle.success,
+# 			label = language[LANG]["send_to_channel_check_all"],
+# 			emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+# 		)
+# 		async def btn_callback(interaction: discord.Interaction):
+# 			embed = discord.Embed()
+# 			for channel in channels:
+# 				members = [str(m.name) for m in channel.members]
+# 				embed.add_field(
+# 					name = f'{channel.name} : ({len(members)} {language[LANG]["precense_users"]})',
+# 					value = ', '.join(members) if len(members) != 0 else '---',
+# 					inline = False,
+# 				)
+# 			await interaction.response.send_message(embed = embed, ephemeral = True)
+# 		button.callback = btn_callback
+# 		return button
 	
-	view.add_item(select_channel())
-	view.add_item(button_all_members())
+# 	view.add_item(select_channel())
+# 	view.add_item(button_all_members())
 
-	await interaction.response.send_message(
-		view = view, 
-		ephemeral=True,
-	)
+# 	await interaction.response.send_message(
+# 		view = view, 
+# 		ephemeral=True,
+# 	)
+
+
 
 # @bot.tree.command(name='set_channel')
 # @app_commands.describe(channel = 'Set up a channel where new messages from the bot will be sent')
@@ -1399,12 +1417,12 @@ async def give_permissions_error(interaction: discord.Interaction, error):
 	else:
 		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
 
-@dev_send_to_channel.error
-async def dev_send_to_channel_error(interaction: discord.Interaction, error):
-	if isinstance(error, app_commands.errors.CheckFailure):
-		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
-	else:
-		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
+# @dev_send_to_channel.error
+# async def dev_send_to_channel_error(interaction: discord.Interaction, error):
+# 	if isinstance(error, app_commands.errors.CheckFailure):
+# 		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
+# 	else:
+# 		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
 
 # @reset_settings.error
 # async def reset_settings_error(interaction: discord.Interaction, error):
