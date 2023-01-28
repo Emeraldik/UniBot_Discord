@@ -423,10 +423,10 @@ def has_channel_permissions():
 		
 	return app_commands.check(predicate)
 
-@bot.tree.command(name='dev_test')
+@bot.tree.command(name='dev_uni_test')
 @app_commands.guild_only()
 @is_owner()
-async def dev_test(interaction: discord.Interaction):
+async def dev_uni_test(interaction: discord.Interaction):
 	with open(files['games'], 'r', encoding='utf-8') as file:
 		games = json.load(file)
 
@@ -892,10 +892,10 @@ class _SettingsMenu(discord.ui.View):
 			view = view
 		)
 
-@bot.tree.command(name='settings')
+@bot.tree.command(name='uni_settings')
 @app_commands.guild_only()
 @has_channel_permissions()
-async def settings(interaction: discord.Interaction):
+async def uni_settings(interaction: discord.Interaction):
 	view = _SettingsMenu()
 	embed = await embedSettignsMenu(interaction)
 	view.embed = embed
@@ -1046,10 +1046,10 @@ class _SubmitMessageModal(discord.ui.Modal, title = language[LANG]["fix_message_
 
 		logger.warning(f'Fix_Message : message was deleted in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({games[str(self.game_id)]["game_info"]["title"]})')
 
-@bot.tree.command(name='fix_message')
+@bot.tree.command(name='uni_fix_message')
 @app_commands.guild_only()
 @has_channel_permissions()
-async def fix_message(interaction: discord.Interaction):
+async def uni_fix_message(interaction: discord.Interaction):
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
 
@@ -1153,8 +1153,8 @@ async def fix_message(interaction: discord.Interaction):
 	view.add_item(select_channel())
 	await interaction.response.send_message(view = view, ephemeral = True)
 
-@bot.tree.command(name='help')
-async def help(interaction: discord.Interaction):
+@bot.tree.command(name='uni_help')
+async def uni_help(interaction: discord.Interaction):
 	embed = discord.Embed()
 	embed.title = f'{language[LANG]["help_title"]}'
 	for _, com in language[LANG]['help_commands'].items():
@@ -1166,9 +1166,9 @@ async def help(interaction: discord.Interaction):
 
 	await interaction.response.send_message(embed = embed, ephemeral = True)
 
-@bot.tree.command(name='ping')
-async def ping(interaction: discord.Interaction):
-	await interaction.response.send_message(content = f'{language[LANG]["bot_latency"]} : {bot.latency}ms', ephemeral = True)
+@bot.tree.command(name='uni_ping')
+async def uni_ping(interaction: discord.Interaction):
+	await interaction.response.send_message(content = f'{language[LANG]["bot_latency"]} : {bot.latency:.3f}s', ephemeral = True)
 
 # @bot.tree.command(name='dev_send_to_channel')
 # @app_commands.guild_only()
@@ -1354,11 +1354,11 @@ async def ping(interaction: discord.Interaction):
 
 # 	await interaction.response.send_message(f'All ready {interaction.user.mention}! Bot was stoped!', ephemeral=True)
 
-@bot.tree.command(name='give_permissions')
+@bot.tree.command(name='dev_uni_give_permissions')
 @app_commands.guild_only()
 @app_commands.describe(boolean = language[LANG]["give_permissions_describe"])
 @is_owner()
-async def give_permissions(interaction: discord.Interaction, user: discord.Member, boolean: bool):
+async def dev_uni_give_permissions(interaction: discord.Interaction, user: discord.Member, boolean: bool):
 	if user.bot:
 		await interaction.response.send_message(content = f'{language[LANG]["give_permissions_error_bot"]}', ephemeral = True)
 		return
@@ -1403,15 +1403,15 @@ async def give_permissions(interaction: discord.Interaction, user: discord.Membe
 # 	if isinstance(error, app_commands.errors.MissingPermissions):
 # 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
 
-@dev_test.error
-async def dev_test_error(interaction: discord.Interaction, error):
+@dev_uni_test.error
+async def dev_uni_test_error(interaction: discord.Interaction, error):
 	if isinstance(error, app_commands.errors.CheckFailure):
 		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
 	else:
 		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
 
-@give_permissions.error
-async def give_permissions_error(interaction: discord.Interaction, error):
+@dev_uni_give_permissions.error
+async def dev_uni_give_permissions_error(interaction: discord.Interaction, error):
 	if isinstance(error, app_commands.errors.CheckFailure):
 		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
 	else:
@@ -1429,15 +1429,15 @@ async def give_permissions_error(interaction: discord.Interaction, error):
 # 	if isinstance(error, app_commands.errors.MissingPermissions):
 # 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
 
-@settings.error
-async def settings_error(interaction: discord.Interaction, error):
+@uni_settings.error
+async def uni_settings_error(interaction: discord.Interaction, error):
 	if isinstance(error, app_commands.errors.CheckFailure):
 		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
 	else:
 		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
 
-@fix_message.error
-async def fix_message_error(interaction: discord.Interaction, error):
+@uni_fix_message.error
+async def uni_fix_message_error(interaction: discord.Interaction, error):
 	if isinstance(error, app_commands.errors.CheckFailure):
 		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
 	else:

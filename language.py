@@ -54,9 +54,9 @@ language['en'] = {
     "delete_message": "Delete message",
     "edit_message": "Edit message",
     "none_message": "Do nothing with the message",
-    "choose_message": "Select the mode of what will happen to the message after the end of the promotion",
-    "settings_message": "Mode settings, what will happen to the message",
-    "current_message_for": "Current mode, what will happen to the message",
+    "choose_message": "Select the mode",
+    "settings_message": "Mode settings, what will happen to the message after the end of the promotion",
+    "current_message_for": "Current mode",
     "last_message": "Last Mode",
     "bot_start": "Run a bot",
     "bot_stop": "Stop the bot",
@@ -106,15 +106,15 @@ language['en'] = {
 	'help_footer' : 'Commands available to users | All commands work within communities',
 	'help_commands' : {
 		'settings' : {
-			'name' : 'settings',
+			'name' : 'uni_settings',
 			'description' : '(Command is available to users with the \'Manage channels\' permission)\nBot settings for the community from which the command was called.',
 		},
 		'fix_message' : {
-			'name' : 'fix_message',
+			'name' : 'uni_fix_message',
 			'description' : '(Command is available to users with the \'Manage channels\' permission)\nManage messages, with distributions that are still active. You can change the name / description / price / region of distribution / link to the game, as well as delete the message through the bot.',
 		},
 		'ping' : {
-			'name' : 'ping',
+			'name' : 'uni_ping',
 			'description' : 'You can find out the current latency of the bot.',
 		}
 	}
@@ -172,9 +172,9 @@ language['ru'] = {
 	'delete_message' : 'Удалить сообщение',
 	'edit_message' : 'Изменить сообщение',
 	'none_message' : 'Ничего не делать с сообщением',
-	'choose_message' : 'Выберите режим, что произойдёт с сообщением после окончания акции',
-	'settings_message' : 'Настройки режима, что произойдёт с сообщением',
-	'current_message_for' : 'Текущий режим, что произойдёт с сообщением',
+	'choose_message' : 'Выберите режим',
+	'settings_message' : 'Настройки режима, что произойдёт с сообщением, после окончания акции',
+	'current_message_for' : 'Текущий режим',
 	'last_message' : 'Прошлый режим',
 	'bot_start' : 'Запустить бота',
 	'bot_stop' : 'Остановить бота',
@@ -224,15 +224,15 @@ language['ru'] = {
 	'help_footer' : 'Команды доступные пользователям | Все команды работают внутри сообществ',
 	'help_commands' : {
 		'settings' : {
-			'name' : 'settings',
+			'name' : 'uni_settings',
 			'description' : '(Команда доступная для пользователей с правом \'Управлять каналами\')\nОсновные настройки бота для сообщества из которого вызвали команду.',
 		},
 		'fix_message' : {
-			'name' : 'fix_message',
+			'name' : 'uni_fix_message',
 			'description' : '(Команда доступная для пользователей с правом \'Управлять каналами\')\nУправление сообщениями, с раздачами, которые всё ещё активны. Можно изменить название/описание/цену/регион раздачи/ссылку на игру, а также удалить сообщение, через бота.',
 		},
 		'ping' : {
-			'name' : 'ping',
+			'name' : 'uni_ping',
 			'description' : 'Можно узнать текущую задержку бота.',
 		}
 	}
