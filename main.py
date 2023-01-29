@@ -598,52 +598,54 @@ class _ReturnButton(discord.ui.Button):
 		await interaction.response.edit_message(content = '', embed = await embedSettignsMenu(interaction), view = self.menu)
 
 class _ChannelSettingsMenu(discord.ui.View):
+	def update_embed(self, interaction, last_channel):
+		with open(files['channels'], 'r', encoding='utf-8') as file:
+			channels = json.load(file)
+		
+		channel = channels[str(interaction.guild.id)]['channel']
+		channel_name = bot.get_channel(int(channel)).name if bot.get_channel(int(channel)) != None else language[LANG]['no_channel']
+
+		embed = discord.Embed()
+		embed.title = language[LANG]["settings_channel"]
+		embed.add_field(name = f'{language[LANG]["current_channel_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = channel_name, inline = False)
+		embed.add_field(name = f'{language[LANG]["last_channel"]}', value = last_channel, inline = False)
+		embed.colour = discord.Color.green()
+		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
+		embed.timestamp = dt.now(timezone('UTC'))
+		
+		return embed
+
 	async def update_message(self, interaction):
 		with open(files['channels'], 'r', encoding='utf-8') as file:
 			channels = json.load(file)
 
 		channel = channels[str(interaction.guild.id)]['channel']
 
-		channel_select = discord.ui.Select(
-			options = [
-				discord.SelectOption(
-					label = text.name,
-					value = str(text.id)
-				) for text in interaction.guild.text_channels
-			],
+		channel_select = discord.ui.ChannelSelect(
+			channel_types = [discord.ChannelType.text],
+			min_values=0,
+			max_values=1,
 			placeholder = language[LANG]["choose_channel"],
 		)
 
-		channel_name = language[LANG]["no_channel"]
-		if bot.get_channel(int(channel)) != None:
-			channel_name = bot.get_channel(int(channel)).name
-		self.last_channel = channel_name
-		embed = discord.Embed()
-		embed.title = language[LANG]["settings_channel"]
-		embed.add_field(name = f'{language[LANG]["current_channel_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = self.last_channel, inline = False)
-		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
-		embed.colour = discord.Color.green()
-		embed.timestamp = dt.now(timezone('UTC'))
-
 		async def select_callback(interaction: discord.Interaction):
-			channel_new = bot.get_channel(int(channel_select.values[0]))
-			if channel_new == None:
-				await interaction.response.send_message(f'{language[LANG]["channel_not_exists"]}', ephemeral = True)
-				return
+			channel_new = [i for i in channel_select.values]
+			if len(channel_new) == 0:
+				channel_new_id = '0'
+				channel_new_name = language[LANG]['no_channel']
+			else:
+				channel_new_id = channel_new[0].id
+				channel_new_name = channel_new[0].name
 
-			# if channel_name == channel_new.name:
-			# 	return
+			last_channel = bot.get_channel(int(channel))
+			if last_channel == None:
+				last_channel_name = language[LANG]['no_channel']
+			else:
+				last_channel_name = last_channel.name
 
-			embed.clear_fields()
-			embed.add_field(name = f'{language[LANG]["current_channel_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = channel_new.name, inline = False)
-			embed.add_field(name = f'{language[LANG]["last_channel"]}', value = self.last_channel, inline = False)
-			
-			logger.info(f'Channel was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({self.last_channel} -> {channel_new.name})')
-			
-			self.last_channel = channel_new.name
 			with open(files['channels'], 'w', encoding='utf-8') as file:
 				channels[str(interaction.guild_id)] = {
-					'channel': str(channel_new.id),
+					'channel': str(channel_new_id),
 					'status': str(channels[str(interaction.guild_id)]['status']),
 					'role': str(channels[str(interaction.guild_id)]['role']),
 					'message_after': str(channels[str(interaction.guild_id)]['message_after']),
@@ -653,73 +655,67 @@ class _ChannelSettingsMenu(discord.ui.View):
 
 				json.dump(channels, file, ensure_ascii=False, indent=4)
 
+			logger.info(f'Channel was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({last_channel_name} -> {channel_new_name})')
+			embed = self.update_embed(interaction, last_channel_name)
 			await interaction.response.edit_message(embed = embed, view = self)
 
 		channel_select.callback = select_callback
 
 		self.add_item(channel_select)
 		self.add_item(_ReturnButton(self.menu))
+		embed = self.update_embed(interaction, '')
 		await interaction.response.edit_message(embed = embed, view = self)
 
 class _RoleSettingsMenu(discord.ui.View):
+	def update_embed(self, interaction, last_role):
+		with open(files['channels'], 'r', encoding='utf-8') as file:
+			channels = json.load(file)
+		
+		role = channels[str(interaction.guild.id)]['role']
+		role_name = interaction.guild.get_role(int(role)).name if interaction.guild.get_role(int(role)) != None else language[LANG]['no_role']
+
+		embed = discord.Embed()
+		embed.title = language[LANG]["settings_role"]
+		embed.add_field(name = f'{language[LANG]["current_role_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = role_name, inline = False)
+		embed.add_field(name = f'{language[LANG]["last_role"]}', value = last_role, inline = False)
+		embed.colour = discord.Color.green()
+		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
+		embed.timestamp = dt.now(timezone('UTC'))
+		
+		return embed
+
 	async def update_message(self, interaction):
 		with open(files['channels'], 'r', encoding='utf-8') as file:
 			channels = json.load(file)
 
 		role = channels[str(interaction.guild.id)]['role']
 
-		role_select = discord.ui.Select(
-			options = [
-				discord.SelectOption(
-					label = role_.name,
-					value = str(role_.id)
-				) for role_ in interaction.guild.roles if (not role_.is_bot_managed())
-			] + [
-				discord.SelectOption(
-					label = language[LANG]["none_role"],
-					value = '0'
-				),
-			],
+		role_select = discord.ui.RoleSelect(
+			min_values=0,
+			max_values=1,
 			placeholder = language[LANG]["choose_role"],
 		)
 
-		role_name = language[LANG]["none_role"]
-		if interaction.guild.get_role(int(role)) != None:
-			role_name = interaction.guild.get_role(int(role)).name
-		self.last_role = role_name
-		embed = discord.Embed()
-		embed.title = language[LANG]["settings_role"]
-		embed.add_field(name = f'{language[LANG]["current_role_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = self.last_role, inline = False)
-		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
-		embed.colour = discord.Color.green()
-		embed.timestamp = dt.now(timezone('UTC'))
-
 		async def select_callback(interaction: discord.Interaction):
-			role_new = interaction.guild.get_role(int(role_select.values[0])) if (role_select.values[0] != '0') else '0'
-			if role_new == None:
-				await interaction.response.send_message(language[LANG]["role_not_exists"], ephemeral = True)
-				return
-
-			if role_new == '0':
-				role_new_name = language[LANG]["none_role"]
+			role_new = [i for i in role_select.values]
+			if len(role_new) == 0:
+				role_new_id = '0'
+				role_new_name = language[LANG]['no_role']
 			else:
-				role_new_name = role_new.name
+				role_new_id = role_new[0].id
+				role_new_name = role_new[0].name
 
-			# if self.last_role == role_new_name:
-			# 	return
-
-			embed.clear_fields()
-			embed.add_field(name = f'{language[LANG]["current_role_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = role_new_name, inline = False)
-			embed.add_field(name = f'{language[LANG]["last_role"]}', value = self.last_role, inline = False)
+			last_role = interaction.guild.get_role(int(role))
+			if last_role == None:
+				last_role_name = language[LANG]['no_role']
+			else:
+				last_role_name = last_role.name
 			
-			logger.info(f'Role was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({self.last_role} -> {role_new_name})')
-			
-			self.last_role = role_new_name
 			with open(files['channels'], 'w', encoding='utf-8') as file:
 				channels[str(interaction.guild_id)] = {
 					'channel': str(channels[str(interaction.guild_id)]['channel']),
 					'status': str(channels[str(interaction.guild_id)]['status']),
-					'role': str(role_new.id) if role_new != '0' else '0',
+					'role': str(role_new_id),
 					'message_after': str(channels[str(interaction.guild_id)]['message_after']),
 					'admin_settings' : channels[str(interaction.guild_id)]['admin_settings'],
 					'games': channels[str(interaction.guild_id)]['games'],
@@ -727,12 +723,15 @@ class _RoleSettingsMenu(discord.ui.View):
 
 				json.dump(channels, file, ensure_ascii=False, indent=4)
 
+			logger.info(f'Role was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({last_role_name} -> {role_new_name})')
+			embed = self.update_embed(interaction, last_role_name)
 			await interaction.response.edit_message(embed = embed, view = self)
 	
 		role_select.callback = select_callback
 
 		self.add_item(role_select)
 		self.add_item(_ReturnButton(self.menu))
+		embed = self.update_embed(interaction, '')
 		await interaction.response.edit_message(embed = embed, view = self)
 
 class _MessageAfterSettingsMenu(discord.ui.View):
