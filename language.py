@@ -117,7 +117,13 @@ language['en'] = {
 			'name' : 'uni_ping',
 			'description' : 'You can find out the current latency of the bot.',
 		}
-	}
+	},
+	'admin_settings' : 'Administration Settings',
+	'admin_settings_embed_title' : 'Selecting roles / users to access UniBot',
+	'admin_settings_choose_role' : 'Select Roles',
+	'admin_settings_choose_user' : 'Select Users',
+	'admin_settings_embed_roles' : 'Roles',
+	'admin_settings_embed_users' : 'Users'
 }
 
 language['ru'] = {
@@ -235,5 +241,11 @@ language['ru'] = {
 			'name' : 'uni_ping',
 			'description' : 'Можно узнать текущую задержку бота.',
 		}
-	}
+	},
+	'admin_settings' : 'Настройки для администрации',
+	'admin_settings_embed_title' : 'Выбор ролей / пользователей, для доступа к UniBot',
+	'admin_settings_choose_role' : 'Выберите роли',
+	'admin_settings_choose_user' : 'Выберите пользователей',
+	'admin_settings_embed_roles' : 'Роли',
+	'admin_settings_embed_users' : 'Пользователи'
 }

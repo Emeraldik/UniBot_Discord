@@ -96,6 +96,10 @@ async def on_ready():
 					'status': str(False),
 					'role': str(0),
 					'message_after': str(None),
+					'admin_settings' : {
+						'roles' : [],
+						'users' : []
+					},
 					'games': {},
 				}
 
@@ -127,6 +131,10 @@ async def on_guild_join(guild):
 				'status': str(False),
 				'role': str(0),
 				'message_after': str(None),
+				'admin_settings' : {
+					'roles' : [],
+					'users' : []
+				},
 				'games': {},
 			}
 
@@ -173,8 +181,9 @@ async def on_guild_remove(guild):
 		channels[str(guild.id)] = {
 			'channel': channels[str(guild.id)]['channel'],
 			'status': str(False),
-			'role': channels[str(guild.id)]['role'],
-			'message_after': channels[str(guild.id)]['message_after'],
+			'role': str(channels[str(guild.id)]['role']),
+			'message_after': str(channels[str(guild.id)]['message_after']),
+			'admin_settings' : channels[str(guild.id)]['admin_settings'],
 			'games': channels[str(guild.id)]['games'],
 		}
 
@@ -303,6 +312,7 @@ async def bot_loop_delete_message():
 								'status': str(check['status']),
 								'role': str(check['role']),
 								'message_after': str(check['message_after']),
+								'admin_settings' : check['admin_settings'],
 								'games': check['games'],
 							}
 
@@ -389,6 +399,7 @@ async def bot_loop_send_message():
 							'status': str(check['status']),
 							'role': str(check['role']),
 							'message_after': str(check['message_after']),
+							'admin_settings': check['admin_settings'],
 							'games': games_channel,
 						}
 
@@ -414,8 +425,18 @@ def has_channel_permissions():
 		if str(interaction.user.id) == ownerID:
 			return True
 
-		if interaction.user.guild_permissions.manage_channels:
+		if interaction.user.guild_permissions.administrator:
 			return True
+
+		with open(files['channels'], 'r', encoding='utf-8') as file:
+			channels = json.load(file)
+
+		if str(interaction.user.id) in channels[str(interaction.guild_id)]['admin_settings']['users']:
+			return True
+
+		for role in channels[str(interaction.guild_id)]['admin_settings']['roles']:
+			if interaction.user.get_role(int(role)) != None:
+				return True
 
 		with open(files['users'], 'r', encoding='utf-8') as file:
 			data = json.load(file)
@@ -534,6 +555,10 @@ class _SubmitModal(discord.ui.Modal, title = language[LANG]["reset_submit_modal"
 				'status': str(False),
 				'role': str(0),
 				'message_after': str(None),
+				'admin_settings' : {
+					'roles' : [],
+					'users' : []
+				},
 				'games': channels[str(interaction.guild.id)]['games'],
 			}
 
@@ -551,9 +576,6 @@ class _SubmitModal(discord.ui.Modal, title = language[LANG]["reset_submit_modal"
 		logger.info(f'Reset was successfuled in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id})')
 
 class _ResetMenu(discord.ui.View):
-	def __init__(self):
-		super().__init__(timeout = None)
-
 	@discord.ui.button(
 		style = discord.ButtonStyle.success,
 		label = language[LANG]["reset_confirm"],
@@ -625,6 +647,7 @@ class _ChannelSettingsMenu(discord.ui.View):
 					'status': str(channels[str(interaction.guild_id)]['status']),
 					'role': str(channels[str(interaction.guild_id)]['role']),
 					'message_after': str(channels[str(interaction.guild_id)]['message_after']),
+					'admin_settings' : channels[str(interaction.guild_id)]['admin_settings'],
 					'games': channels[str(interaction.guild_id)]['games'],
 				}
 
@@ -698,6 +721,7 @@ class _RoleSettingsMenu(discord.ui.View):
 					'status': str(channels[str(interaction.guild_id)]['status']),
 					'role': str(role_new.id) if role_new != '0' else '0',
 					'message_after': str(channels[str(interaction.guild_id)]['message_after']),
+					'admin_settings' : channels[str(interaction.guild_id)]['admin_settings'],
 					'games': channels[str(interaction.guild_id)]['games'],
 				}
 
@@ -758,6 +782,7 @@ class _MessageAfterSettingsMenu(discord.ui.View):
 					'status': str(channels[str(interaction.guild_id)]['status']),
 					'role': str(channels[str(interaction.guild_id)]['role']),
 					'message_after': str(message_after_select.values[0]),
+					'admin_settings' : channels[str(interaction.guild_id)]['admin_settings'],
 					'games': channels[str(interaction.guild_id)]['games'],
 				}
 
@@ -770,6 +795,113 @@ class _MessageAfterSettingsMenu(discord.ui.View):
 		self.add_item(message_after_select)
 		self.add_item(_ReturnButton(self.menu))
 		await interaction.response.edit_message(embed = embed, view = self)
+
+
+class _AdminSettingsMenu(discord.ui.View):
+	def update_embed(self, interaction):
+		with open(files['channels'], 'r', encoding='utf-8') as file:
+			channels = json.load(file)
+		
+		roles = channels[str(interaction.guild.id)]['admin_settings']['roles']
+		users = channels[str(interaction.guild.id)]['admin_settings']['users']
+		
+		embed = discord.Embed()
+		embed.title = language[LANG]["admin_settings_embed_title"]
+		embed.colour = discord.Color.green()
+		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
+		embed.timestamp = dt.now(timezone('UTC'))
+
+		role_names = [f'-{interaction.guild.get_role(int(role)).name}' for role in roles if interaction.guild.get_role(int(role)) != None]
+
+		embed.add_field(name = f'{language[LANG]["admin_settings_embed_roles"]} : ', value = '\n'.join(role_names), inline = True)
+
+		user_names = [f'-{interaction.guild.get_member(int(user)).name}' for user in users if interaction.guild.get_member(int(user)) != None]
+
+		embed.add_field(name = f'{language[LANG]["admin_settings_embed_users"]} : ', value = '\n'.join(user_names), inline = True)
+				
+		return embed
+
+	async def update_message(self, interaction):
+		with open(files['channels'], 'r', encoding='utf-8') as file:
+			channels = json.load(file)
+		
+		roles = channels[str(interaction.guild.id)]['admin_settings']['roles']
+		users = channels[str(interaction.guild.id)]['admin_settings']['users']
+
+		role_select = discord.ui.RoleSelect(
+			min_values=0,
+			max_values=24,
+			placeholder = language[LANG]["admin_settings_choose_role"],
+		)
+
+		async def role_callback(interaction: discord.Interaction):
+			new_roles = []
+			for role in role_select.values:
+				new_roles.append(str(role.id))
+
+			with open(files['channels'], 'w', encoding='utf-8') as file:
+				channels[str(interaction.guild_id)] = {
+					'channel': str(channels[str(interaction.guild_id)]['channel']),
+					'status': str(channels[str(interaction.guild_id)]['status']),
+					'role': str(channels[str(interaction.guild_id)]['role']),
+					'message_after': str(channels[str(interaction.guild_id)]['message_after']),
+					'admin_settings' : {
+						'roles' : new_roles,
+						'users' : channels[str(interaction.guild_id)]['admin_settings']['users']
+					},
+					'games': channels[str(interaction.guild_id)]['games'],
+				}
+
+				json.dump(channels, file, ensure_ascii=False, indent=4)
+			
+			role_names = [f'{interaction.guild.get_role(int(role)).name}' for role in roles if interaction.guild.get_role(int(role)) != None]
+			new_role_names = [f'{interaction.guild.get_role(int(role)).name}' for role in new_roles if interaction.guild.get_role(int(role)) != None]
+			logger.warning(f'AdminSettings : roles was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ([{", ".join(role_names)}] -> [{", ".join(new_role_names)}])')
+
+			await interaction.response.edit_message(embed = self.update_embed(interaction), view = self)
+
+		role_select.callback = role_callback
+
+		user_select = discord.ui.UserSelect(
+			min_values=0,
+			max_values=24,
+			placeholder = language[LANG]["admin_settings_choose_user"],
+		)
+
+		async def user_callback(interaction: discord.Interaction):
+			new_users = []
+			for user in user_select.values:
+				new_users.append(str(user.id))
+
+			with open(files['channels'], 'w', encoding='utf-8') as file:
+				channels[str(interaction.guild_id)] = {
+					'channel': str(channels[str(interaction.guild_id)]['channel']),
+					'status': str(channels[str(interaction.guild_id)]['status']),
+					'role': str(channels[str(interaction.guild_id)]['role']),
+					'message_after': str(channels[str(interaction.guild_id)]['message_after']),
+					'admin_settings' : {
+						'roles' : channels[str(interaction.guild_id)]['admin_settings']['roles'],
+						'users' : new_users
+					},
+					'games': channels[str(interaction.guild_id)]['games'],
+				}
+
+				json.dump(channels, file, ensure_ascii=False, indent=4)
+
+			user_names = [f'{interaction.guild.get_member(int(user)).name}' for user in users if interaction.guild.get_member(int(user)) != None]
+			new_user_names = [f'{interaction.guild.get_member(int(user)).name}' for user in new_users if interaction.guild.get_member(int(user)) != None]
+			logger.warning(f'AdminSettings : users was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ([{", ".join(user_names)}] -> [{", ".join(new_user_names)}])')
+
+			await interaction.response.edit_message(embed = self.update_embed(interaction), view = self)
+
+		user_select.callback = user_callback
+
+		self.add_item(role_select)
+		self.add_item(user_select)
+		self.add_item(_ReturnButton(self.menu))
+		embed = self.update_embed(interaction)
+		await interaction.response.edit_message(embed = embed, view = self)
+
 
 class _StatusSettingsButton(discord.ui.Button):
 	def __init__(self, view, interaction):
@@ -793,6 +925,7 @@ class _StatusSettingsButton(discord.ui.Button):
 				'status': str(True) if channels[str(interaction.guild_id)]['status'] == 'False' else str(False),
 				'role': str(channels[str(interaction.guild_id)]['role']),
 				'message_after': str(channels[str(interaction.guild_id)]['message_after']),
+				'admin_settings': channels[str(interaction.guild_id)]['admin_settings'],
 				'games': channels[str(interaction.guild_id)]['games'],
 			}
 
@@ -807,13 +940,7 @@ class _StatusSettingsButton(discord.ui.Button):
 
 		await interaction.response.edit_message(content = '', embed = await embedSettignsMenu(interaction), view = self.menu)
 
-			
-
-
 class _SettingsMenu(discord.ui.View):
-	def __init__(self):
-		super().__init__(timeout = None)
-
 	async def update_message(self, interaction: discord.Interaction):
 		with open(files['channels'], 'r', encoding='utf-8') as file:
 			channels = json.load(file)
@@ -860,21 +987,6 @@ class _SettingsMenu(discord.ui.View):
 		role_menu = _RoleSettingsMenu()
 		role_menu.menu = self
 		await role_menu.update_message(interaction)
-		# with open(files['channels'], 'r', encoding='utf-8') as file:
-		# 	channels = json.load(file)
-
-		# with open(files['channels'], 'w', encoding='utf-8') as file:
-		# 	channels[str(interaction.guild_id)] = {
-		# 		'channel': str(channels[str(interaction.guild_id)]['channel']),
-		# 		'status': str(channels[str(interaction.guild_id)]['status']),
-		# 		'role': '@everyone' if channels[str(interaction.guild_id)]['role'] == 'None' else 'None',
-		# 		'need_delete': str(channels[str(interaction.guild_id)]['need_delete']),
-		# 		'games': channels[str(interaction.guild_id)]['games'],
-		# 	}
-
-		# 	json.dump(channels, file, ensure_ascii=False, indent=4)
-		
-		# await self.update_message(interaction)
 
 	@discord.ui.button(
 		style = discord.ButtonStyle.danger,
@@ -891,6 +1003,20 @@ class _SettingsMenu(discord.ui.View):
 			embed = None,
 			view = view
 		)
+
+	@discord.ui.button(
+		style = discord.ButtonStyle.secondary,
+		label = language[LANG]['admin_settings'],
+		row = 1,
+	)
+	async def admin_settings(self, interaction: discord.Interaction, button):
+		if interaction.user.guild_permissions.administrator == False and str(interaction.user.id) != ownerID:
+			await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
+			return
+
+		admin_menu = _AdminSettingsMenu()
+		admin_menu.menu = self
+		await admin_menu.update_message(interaction)
 
 @bot.tree.command(name='uni_settings')
 @app_commands.guild_only()
@@ -951,10 +1077,11 @@ class _ChangeMessageModal(discord.ui.Modal):
 
 			with open(files['channels'], 'w', encoding='utf-8') as file:
 				channels[str(interaction.guild.id)] = {
-					'channel': channels[str(interaction.guild.id)]['channel'],
-					'status': channels[str(interaction.guild.id)]['status'],
-					'role': channels[str(interaction.guild.id)]['role'],
-					'message_after': channels[str(interaction.guild.id)]['message_after'],
+					'channel': str(channels[str(interaction.guild.id)]['channel']),
+					'status': str(channels[str(interaction.guild.id)]['status']),
+					'role': str(channels[str(interaction.guild.id)]['role']),
+					'message_after': str(channels[str(interaction.guild.id)]['message_after']),
+					'admin_settings': channels[str(interaction.guild_id)]['admin_settings'],
 					'games': games,
 				}
 
@@ -1027,10 +1154,11 @@ class _SubmitMessageModal(discord.ui.Modal, title = language[LANG]["fix_message_
 
 		with open(files['channels'], 'w', encoding='utf-8') as file:
 			channels[str(interaction.guild.id)] = {
-				'channel': channels[str(interaction.guild.id)]['channel'],
-				'status': channels[str(interaction.guild.id)]['status'],
-				'role': channels[str(interaction.guild.id)]['role'],
-				'message_after': channels[str(interaction.guild.id)]['message_after'],
+				'channel': str(channels[str(interaction.guild.id)]['channel']),
+				'status': str(channels[str(interaction.guild.id)]['status']),
+				'role': str(channels[str(interaction.guild.id)]['role']),
+				'message_after': str(channels[str(interaction.guild.id)]['message_after']),
+				'admin_settings': channels[str(interaction.guild.id)]['admin_settings'],
 				'games': games,
 			}
 
