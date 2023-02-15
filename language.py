@@ -18,7 +18,7 @@ language['en'] = {
     "precense_users": "users",
     "game_price": "Game price",
     "discount_ended": "Promotion ended",
-    "not_ru_akk": "(Not for RU account)",
+    "not_ru_akk": "(Not for RU, RB account)",
     "game_link": "Distribution link",
     "discount_will_ended": "Promotion ends",
     "no_channel": "Channel not installed",
@@ -28,7 +28,8 @@ language['en'] = {
     "message_changes_edit": "Messages will change",
     "bot_started": "Bot launched",
     "bot_stoped": "Bot stopped",
-    "settings": "Settings bot",
+    "settings_epic_games": "Settings Epic Games",
+    "settings_steam": "Settings Steam",
     "current_channel": "Distribution channel",
     "current_role": "Distribution Role",
     "current_mode": "Message Mode",
@@ -66,7 +67,7 @@ language['en'] = {
     "role_setup": "Choose role",
     "no_roles_guild": "No roles available in this community",
     "reset": "Reset settings",
-    "message_reset": "Are you sure you want to reset ALL bot settings in this community?",
+    "message_reset": "Are you sure you want to reset ALL settings in this community for the current distribution platform.?",
     "fix_message_editor": "Edit message",
     "fix_message_editor_error": "Error: the key is not recognized, perhaps in the 'key' column you have written something other than ru or not_ru",
     "fix_message_apply": "Confirm Changes",
@@ -85,10 +86,12 @@ language['en'] = {
     "fix_message_modal_description": "Game description",
     "fix_message_modal_url": "Link to the game in the Epic Games Store",
     "fix_message_modal_price": "Price per game",
-    "fix_message_modal_key": "Distribution access in Russia, 'ru' or 'not_ru'",
+    "fix_message_modal_key": "Distribution access in RF and RB, 'ru' or 'not_ru'",
     "fix_message_button_delete": "Delete message",
     "fix_message_how_view_now": "What does the message look like now?",
     "fix_message_no_messages": "There are no messages to edit/delete",
+    "button_epic_games" : "Epic Games",
+    "button_steam" : "Steam",
     "send_to_channel_choose": "Select the channel where to transfer the user with the nickname",
     "send_to_channel_sorry": "Sorry",
     "send_to_channel_no_voice": "must be in the voice channel",
@@ -105,17 +108,21 @@ language['en'] = {
    	'help_title' : 'Command help menu',
 	'help_footer' : 'Commands available to users | All commands work within communities',
 	'help_commands' : {
-		'settings' : {
-			'name' : 'uni_settings',
-			'description' : '(Command is available to users with the \'Manage channels\' permission)\nBot settings for the community from which the command was called.',
+		'admin' : {
+			'settings' : {
+				'name' : 'uni_settings',
+				'description' : '(Command is available to users with the \'Administration\' permission)\nBot settings for the community from which the command was called.',
+			}
+			# 'fix_message' : {
+			# 	'name' : 'uni_fix_message',
+			# 	'description' : '(Command is available to users with the \'Administration\' permission)\nManage messages, with distributions that are still active. You can change the name / description / price / region of distribution / link to the game, as well as delete the message through the bot.',
+			# }
 		},
-		'fix_message' : {
-			'name' : 'uni_fix_message',
-			'description' : '(Command is available to users with the \'Manage channels\' permission)\nManage messages, with distributions that are still active. You can change the name / description / price / region of distribution / link to the game, as well as delete the message through the bot.',
-		},
-		'ping' : {
-			'name' : 'uni_ping',
-			'description' : 'You can find out the current latency of the bot.',
+		'not_admin' : {
+			'ping' : {
+				'name' : 'uni_ping',
+				'description' : 'You can find out the current latency of the bot.',
+			}
 		}
 	},
 	'admin_settings' : 'Administration Settings',
@@ -123,7 +130,17 @@ language['en'] = {
 	'admin_settings_choose_role' : 'Select Roles',
 	'admin_settings_choose_user' : 'Select Users',
 	'admin_settings_embed_roles' : 'Roles',
-	'admin_settings_embed_users' : 'Users'
+	'admin_settings_embed_users' : 'Users',
+	'discount_started' : 'Became aware of the promotion',
+	'fix_message_embed_title' : 'Giveaway messages available for editing/deleting',
+	'fix_message_embed_epic_games_list' : 'Epic Games',
+	'fix_message_embed_steam_list' : 'Steam',
+	'anounce_publish_start' : 'Enable post publishing',
+	'anounce_publish_stop' : 'Stop publishing posts',
+	'return_to_main' : 'Return to main menu',
+	'fix_message_button' : 'Fix message',
+	'in_develop' : 'In development',
+	'command_in_develop' : 'This command is in development'
 }
 
 language['ru'] = {
@@ -142,9 +159,9 @@ language['ru'] = {
 	'precense_users' : 'чел',
 	'game_price' : 'Цена игры',
 	'discount_ended' : 'Акция закончилась',
-	'not_ru_akk' : '(Не для RU аккаунта)',
+	'not_ru_akk' : '(Не для РФ, РБ аккаунта)',
 	'game_link' : 'Ссылка на раздачу',
-	'discount_will_ended' : 'Акция заканчивается',
+	'discount_will_ended' : 'Акция закончится',
 	'no_channel' : 'Канал не установлен',
 	'no_role' : 'Роль не установлена',
 	'no_message_changes' : 'Без изменений',
@@ -152,7 +169,8 @@ language['ru'] = {
 	'message_changes_edit' : 'Сообщения будут изменяться',
 	'bot_started' : 'Бот запущен',
 	'bot_stoped' : 'Бот остановлен',
-	'settings' : 'Настройки бота',
+    "settings_epic_games": "Настройки Epic Games",
+    "settings_steam": "Настройки Steam",
 	'current_channel' : 'Канал для раздач',
 	'current_role' : 'Роль для раздач',
 	'current_mode' : 'Режим для сообщений',
@@ -176,7 +194,7 @@ language['ru'] = {
 	'role_not_exists' : 'Ошибка : такой роли больше не существует',
 	'last_role' : 'Первоначальная роль',
 	'delete_message' : 'Удалить сообщение',
-	'edit_message' : 'Изменить сообщение',
+	'edit_message' : 'Исправить сообщение',
 	'none_message' : 'Ничего не делать с сообщением',
 	'choose_message' : 'Выберите режим',
 	'settings_message' : 'Настройки режима, что произойдёт с сообщением, после окончания акции',
@@ -186,33 +204,35 @@ language['ru'] = {
 	'bot_stop' : 'Остановить бота',
 	'channel_setup' : 'Выбрать канал',
 	'no_channels_guild' : 'Нет доступных текстовых каналов в этом сообществе',
-	'message_setup' : 'Выбрать режим, для сообщений',
+	'message_setup' : 'Выбрать режим для сообщений',
 	'role_setup' : 'Выбрать роль',
 	'no_roles_guild' : 'Нет доступных ролей в этом сообществе',
 	'reset' : 'Сбросить настройки',
-	'message_reset' : 'Вы точно уверены, что хотите сбросить ВСЕ настройки бота в этом сообществе?',
-	'fix_message_editor' : 'Изменение сообщения',
+	'message_reset' : 'Вы точно уверены, что хотите сбросить ВСЕ настройки бота в этом сообществе для текущей платформы раздачи?',
+	'fix_message_editor' : 'Исправление сообщения',
 	'fix_message_editor_error' : 'Ошибка : ключ не распознан, возможно в графе \'key\' вы прописали что-то иное, а не ru или not_ru',
-	'fix_message_apply' : 'Подтвердить изменения',
-	'fix_message_edit_successful' : 'Изменение сообщения : успешно!',
-	'fix_message_discard' : 'Отменить изменения',
-	'fix_message_edit_discard' : 'Изменение сообщения : отменено!',
-	'fix_message_how_view' : 'Как будет выглядеть изменённое сообщение',
+	'fix_message_apply' : 'Подтвердить исправления',
+	'fix_message_edit_successful' : 'Исправление сообщения : успешно!',
+	'fix_message_discard' : 'Отменить исправления',
+	'fix_message_edit_discard' : 'Исправление сообщения : отменено!',
+	'fix_message_how_view' : 'Как будет выглядеть исправленное сообщение',
 	'fix_message_delete_modal' : 'Для удаления сообщения введите \'SUBMIT\'',
 	'fix_message_delete_submit' : 'Подтвердить удаление',
 	'fix_message_delete_error' : 'Ошибка : удаление сообщения отменено!',
 	'fix_message_delete_successful' : 'Сообщение удалено!',
 	'fix_message_choose' : 'Выберите сообщение',
 	'fix_message_message_not_exists' : 'Ошибка : это сообщение больше не существует!',
-	'fix_message_change_message' : 'Изменить сообщение',
+	'fix_message_change_message' : 'Исправить сообщение',
 	'fix_message_modal_title' : 'Название игры',
 	'fix_message_modal_description' : 'Описание игры',
 	'fix_message_modal_url' : 'Ссылка на игру в Epic Games Store',
 	'fix_message_modal_price' : 'Цена на игру',
-	'fix_message_modal_key' : 'Доступ раздачи в РФ, \'ru\' или \'not_ru\'',
+	'fix_message_modal_key' : 'Доступ раздачи в РФ и РБ, \'ru\' или \'not_ru\'',
 	'fix_message_button_delete' : 'Удалить сообщение',
 	'fix_message_how_view_now' : 'Как сейчас выглядит сообщение',
-	'fix_message_no_messages' : 'Нет сообщений, которые можно изменить/удалить',
+	'fix_message_no_messages' : 'Нет сообщений, которые можно исправить',
+    "button_epic_games" : "Epic Games",
+    "button_steam" : "Steam",
 	'send_to_channel_choose' : 'Выберите канал, куда перебросить пользователя с ником',
 	'send_to_channel_sorry' : 'Извините',
 	'send_to_channel_no_voice' : 'должен находиться в голосовом канале',
@@ -229,17 +249,21 @@ language['ru'] = {
 	'help_title' : 'Меню помощи по командам',
 	'help_footer' : 'Команды доступные пользователям | Все команды работают внутри сообществ',
 	'help_commands' : {
-		'settings' : {
-			'name' : 'uni_settings',
-			'description' : '(Команда доступная для пользователей с правом \'Управлять каналами\')\nОсновные настройки бота для сообщества из которого вызвали команду.',
+		'admin' : {
+			'settings' : {
+				'name' : 'uni_settings',
+				'description' : '(Команда доступная для пользователей с правом \'Администратор\')\nОсновные настройки бота для сообщества из которого вызвали команду.',
+			}
+			# 'fix_message' : {
+			# 	'name' : 'uni_fix_message',
+			# 	'description' : '(Команда доступная для пользователей с правом \'Администратор\')\nУправление сообщениями, с раздачами, которые всё ещё активны. Можно исправить название/описание/цену/регион раздачи/ссылку на игру, а также удалить сообщение, через бота.',
+			# }
 		},
-		'fix_message' : {
-			'name' : 'uni_fix_message',
-			'description' : '(Команда доступная для пользователей с правом \'Управлять каналами\')\nУправление сообщениями, с раздачами, которые всё ещё активны. Можно изменить название/описание/цену/регион раздачи/ссылку на игру, а также удалить сообщение, через бота.',
-		},
-		'ping' : {
-			'name' : 'uni_ping',
-			'description' : 'Можно узнать текущую задержку бота.',
+		'not_admin' : {
+			'ping' : {
+				'name' : 'uni_ping',
+				'description' : 'Можно узнать текущую задержку бота.',
+			}
 		}
 	},
 	'admin_settings' : 'Настройки для администрации',
@@ -247,5 +271,15 @@ language['ru'] = {
 	'admin_settings_choose_role' : 'Выберите роли',
 	'admin_settings_choose_user' : 'Выберите пользователей',
 	'admin_settings_embed_roles' : 'Роли',
-	'admin_settings_embed_users' : 'Пользователи'
+	'admin_settings_embed_users' : 'Пользователи',
+	'discount_started' : 'Стало известно о акции',
+	'fix_message_embed_title' : 'Сообщения с раздачами, доступные для исправления',
+	'fix_message_embed_epic_games_list' : 'Epic Games',
+	'fix_message_embed_steam_list' : 'Steam',
+	'anounce_publish_start' : 'Включить публикацию сообщений',
+	'anounce_publish_stop' : 'Выключить публикацию сообщений',
+	'return_to_main' : 'Вернуться к основному меню',
+	'fix_message_button' : 'Исправить сообщение',
+	'in_develop' : 'В разработке',
+	'command_in_develop' : 'Данная команда находиться в разработке'
 }

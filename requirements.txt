@@ -1,6 +1,13 @@
 discord
 requests
+bs4
 python-dotenv
 deep_translator
 pytz
 loguru
+yadisk_async
+asyncio
+aiofiles
+aiohttp
+fake_useragent
+deepdiff

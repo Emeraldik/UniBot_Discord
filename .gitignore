@@ -13,3 +13,5 @@
 *.json
 *.pyc
 *.log
+*.zip
+file_change.py

@@ -9,18 +9,28 @@ from pytz import timezone
 
 import os
 import json
+import asyncio
+from deepdiff import DeepDiff
 
-import game_informer
+import backup
+import epic_informer
+import steam_informer
+
 from language import language, LANG
-
-from loguru import logger
+from log_main import logger
 
 load_dotenv(find_dotenv())
 
 files = {
-	'users': 'users.json', 
+	#'users': 'users.json', 
 	'channels': 'channels.json',
-	'games': 'games.json',
+	'epic_games': 'epic_games.json',
+	'steam' : 'steam.json'
+}
+
+thumbnails = {
+	'epic_games' : 'https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.icon-icons.com%2Ficons2%2F2429%2FPNG%2F512%2Fepic_games_logo_icon_147294.png&f=1&nofb=1&ipt=fcb317278eedd075465f00e4f3a6c99f2a970dc635bd138a317b027b936d260e&ipo=images',
+	'steam' : 'https://soft-list.ru/wp-content/uploads/2021/07/steam.png',
 }
 
 ownerID = os.environ['ownerID']
@@ -29,19 +39,14 @@ users = {
 	ownerID,
 }
 
-logger.add('logger.log', 
-	format='{time} {level} {message}', 
-	level = 'DEBUG', 
-	rotation = '1 week', 
-	compression = 'zip'
-)
-
 bot = commands.Bot(command_prefix='.', intents=discord.Intents.all(), help_command = None)
 
 @bot.event
 async def setup_hook():
+	bot_loop_backup.start()
 	bot_loop_send_message.start()
 	bot_loop_delete_message.start()
+	bot_loop_edit_message.start()
 
 @bot.event
 async def on_ready():
@@ -57,34 +62,33 @@ async def on_ready():
 			with open(file_name, 'w', encoding='utf-8') as file:
 				file.write('{}')
 
-	print(f'Discord Bot {bot.user} is ready!')
 	logger.debug(f'Discord Bot {bot.user} is ready!')
 	
 	for guild in bot.guilds:
-		data_members = {}
+		# data_members = {}
 
-		with open(files['users'], 'r', encoding='utf-8') as file:
-			data = json.load(file)
+		# with open(files['users'], 'r', encoding='utf-8') as file:
+		# 	data = json.load(file)
 
-		with open(files['users'], 'w', encoding='utf-8') as file:
-			for member in guild.members:
-				if not member.bot:
-					if not str(guild.id) in data:
-						data_members[str(member.id)] = {
-							'name': str(member.name),
-							'has_permissions': str(True) if ((str(member.id) in users) or (str(member.id) == ownerID)) else str(False),  
-						}
-					elif not str(member.id) in data[str(guild.id)]:
-						data_members[str(member.id)] = {
-							'name': str(member.name),
-							'has_permissions': str(True) if ((str(member.id) in users) or (str(member.id) == ownerID)) else str(False),  
-						}
-					else:
-						data_members = data[str(guild.id)]
+		# with open(files['users'], 'w', encoding='utf-8') as file:
+		# 	for member in guild.members:
+		# 		if not member.bot:
+		# 			if not str(guild.id) in data:
+		# 				data_members[str(member.id)] = {
+		# 					'name': str(member.name),
+		# 					'has_permissions': str(True) if ((str(member.id) in users) or (str(member.id) == ownerID)) else str(False),  
+		# 				}
+		# 			elif not str(member.id) in data[str(guild.id)]:
+		# 				data_members[str(member.id)] = {
+		# 					'name': str(member.name),
+		# 					'has_permissions': str(True) if ((str(member.id) in users) or (str(member.id) == ownerID)) else str(False),  
+		# 				}
+		# 			else:
+		# 				data_members = data[str(guild.id)]
 
-			data[str(guild.id)] = data_members
+		# 	data[str(guild.id)] = data_members
 
-			json.dump(data, file, ensure_ascii=False, indent=4)
+		# 	json.dump(data, file, ensure_ascii=False, indent=4)
 		
 		with open(files['channels'], 'r', encoding='utf-8') as file:
 			channels = json.load(file)
@@ -92,24 +96,30 @@ async def on_ready():
 		with open(files['channels'], 'w', encoding='utf-8') as file:
 			if not str(guild.id) in channels:
 				channels[str(guild.id)] = {
-					'channel': str(0),
-					'status': str(False),
-					'role': str(0),
-					'message_after': str(None),
 					'admin_settings' : {
 						'roles' : [],
 						'users' : []
-					},
-					'games': {},
-				}
+					}
+				}	
+				for parser in thumbnails.keys():
+					channels[str(guild.id)].update({parser : {}})
+					channels[str(guild.id)][parser].update({
+						'channel': str(0),
+						'anounce_publish' : str(False),
+						'status': str(False),
+						'role': str(0),
+						'message_after': str(None),
+						'games': {},
+					})
+
+				logger.debug(f'Bot joined to new guild in offline : {guild.name}')
 
 			json.dump(channels, file, ensure_ascii=False, indent=4)	
 
-	print('Database loaded!')
+	logger.debug('Database loaded!')
 
 	try:
 		synced = await bot.tree.sync()
-		print(f'All is right. Synced {len(synced)} commands')
 		logger.debug(f'All is right. Synced {len(synced)} commands')
 	except Exception as e:
 		print(e)
@@ -127,43 +137,43 @@ async def on_guild_join(guild):
 	with open(files['channels'], 'w', encoding='utf-8') as file:
 		if not str(guild.id) in channels:
 			channels[str(guild.id)] = {
-				'channel': str(0),
-				'status': str(False),
-				'role': str(0),
-				'message_after': str(None),
 				'admin_settings' : {
 					'roles' : [],
 					'users' : []
-				},
-				'games': {},
+				}
 			}
+			for parser in thumbnails.keys():
+				channels[str(guild.id)].update({parser : {}})
+				channels[str(guild.id)][parser].update({
+					'channel': str(0),
+					'anounce_publish' : str(False),
+					'status': str(False),
+					'role': str(0),
+					'message_after': str(None),
+					'games': {},
+				})
 
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 
 	data_members = {}
 
-	with open(files['users'], 'r', encoding='utf-8') as file:
-		data = json.load(file)
+	# with open(files['users'], 'r', encoding='utf-8') as file:
+	# 	data = json.load(file)
 
-	with open(files['users'], 'w', encoding='utf-8') as file:
-		for member in guild.members:
-			if not member.bot:
-				if not str(guild.id) in data:
-					data_members[str(member.id)] = {
-						'name': str(member.name),
-						'has_permissions': str(True) if ((str(member.id) in users) or (str(member.id) == ownerID)) else str(False),  
-					}
-				elif not str(member.id) in data[str(guild.id)]:
-					data_members[str(member.id)] = {
-						'name': str(member.name),
-						'has_permissions': str(True) if ((str(member.id) in users) or (str(member.id) == ownerID)) else str(False),  
-					}
-				else:
-					data_members = data[str(guild.id)]
+	# with open(files['users'], 'w', encoding='utf-8') as file:
+	# 	for member in guild.members:
+	# 		if not member.bot:
+	# 			if (not str(guild.id) in data) or (not str(member.id) in data[str(guild.id)]):
+	# 				data_members[str(member.id)] = {
+	# 					'name': str(member.name),
+	# 					'has_permissions': str(True) if ((str(member.id) in users) or (str(member.id) == ownerID)) else str(False),  
+	# 				}
+	# 			else:
+	# 				data_members = data[str(guild.id)]
 
-		data[str(guild.id)] = data_members
+	# 	data[str(guild.id)] = data_members
 
-		json.dump(data, file, ensure_ascii=False, indent=4)
+	# 	json.dump(data, file, ensure_ascii=False, indent=4)
 
 	logger.debug(f'Bot joined to new guild : {guild.name}')
 
@@ -178,14 +188,10 @@ async def on_guild_remove(guild):
 		channels = json.load(file)
 
 	with open(files['channels'], 'w', encoding='utf-8') as file:
-		channels[str(guild.id)] = {
-			'channel': channels[str(guild.id)]['channel'],
-			'status': str(False),
-			'role': str(channels[str(guild.id)]['role']),
-			'message_after': str(channels[str(guild.id)]['message_after']),
-			'admin_settings' : channels[str(guild.id)]['admin_settings'],
-			'games': channels[str(guild.id)]['games'],
-		}
+		for parser in thumbnails.keys():
+			channels[str(guild.id)][parser].update({
+				'status' : str(False),
+			})
 
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 	
@@ -198,19 +204,19 @@ async def on_guild_remove(guild):
 
 @bot.event
 async def on_member_join(member):
-	with open(files['users'], 'r', encoding='utf-8') as file:
-		data = json.load(file)
+	# with open(files['users'], 'r', encoding='utf-8') as file:
+	# 	data = json.load(file)
 
-	with open(files['users'], 'w', encoding='utf-8') as file:
-		data_members = data[str(member.guild.id)]
-		if not str(member.id) in data_members:
-			data_members[str(member.id)] = {
-				'name': str(member.name),
-				'has_permissions': str(True) if ((str(member.id) in users) or (str(member.id) == ownerID)) else str(False),  
-			}
-			data[str(member.guild.id)] = data_members
+	# with open(files['users'], 'w', encoding='utf-8') as file:
+	# 	data_members = data[str(member.guild.id)]
+	# 	if not str(member.id) in data_members:
+	# 		data_members[str(member.id)] = {
+	# 			'name': str(member.name),
+	# 			'has_permissions': str(True) if ((str(member.id) in users) or (str(member.id) == ownerID)) else str(False),  
+	# 		}
+	# 		data[str(member.guild.id)] = data_members
 
-		json.dump(data, file, ensure_ascii=False, indent=4)
+	# 	json.dump(data, file, ensure_ascii=False, indent=4)
 
 	logger.debug(f'New member : {member.name} in guild : {member.guild.name}')
 
@@ -221,190 +227,392 @@ async def on_member_join(member):
 
 @bot.event
 async def on_member_remove(member):
+	logger.debug(f'Member leave : {member.name} in guild : {member.guild.name}')
+
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
 		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"][str(len(bot.guilds) % 10)]} ({len(bot.users)} {language[LANG]["precense_users"]})',
 	))
 
-@bot.event
-async def on_user_update(before, after):
-	with open(files['users'], 'r', encoding='utf-8') as file:
-		data = json.load(file)
+# @bot.event
+# async def on_user_update(before, after):
+# 	with open(files['users'], 'r', encoding='utf-8') as file:
+# 		data = json.load(file)
 
-	with open(files['users'], 'w', encoding='utf-8') as file:
-		for key, guild in data.items():
-			if str(before.id) in guild:
-				guild[str(before.id)] = {
-					'name': str(after.name),
-					'has_permissions': guild[str(before.id)]['has_permissions'],  
-				}
+# 	with open(files['users'], 'w', encoding='utf-8') as file:
+# 		for key, guild in data.items():
+# 			if str(before.id) in guild:
+# 				guild[str(before.id)] = {
+# 					'name': str(after.name),
+# 					'has_permissions': guild[str(before.id)]['has_permissions'],  
+# 				}
 	
-		json.dump(data, file, ensure_ascii=False, indent=4)
+# 		json.dump(data, file, ensure_ascii=False, indent=4)
 
-@tasks.loop(minutes=10.0, reconnect=True)
-async def bot_loop_delete_message():
-	logger.info(f'Start bot_loop_delete_message')
+@tasks.loop(hours=1.0, reconnect=True)
+async def bot_loop_backup():
+	await backup.start_backup(files.values())
+	logger.debug(f'Backup is created successful')
+
+@tasks.loop(minutes=15.0, reconnect=True)
+async def bot_loop_edit_message():
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
 
-	with open(files['games'], 'r', encoding='utf-8') as file:
-		games = json.load(file)
+	for guild in bot.guilds:
+		for parser in thumbnails.keys():
+			with open(files[parser], 'r', encoding = 'utf-8') as file:
+				file_games = json.load(file)
+
+			file_guild = channels[str(guild.id)][parser]
+
+			if len(file_guild['games']) != 0:
+				for key, game in file_guild['games'].items():
+					if game['expired_check'] != 'True' or game['was_changed_by_user'] != 'True':
+						if parser == 'epic_games':
+							for region, data in file_games.items():
+								if key in data:
+									new_dict = {
+										'title' : data[key]['title'],
+										'description' : data[key]['description'],
+										'url' : data[key]['url'],
+										'price' : data[key]['price'],
+										'date_end' : data[key]['date_end'],
+										'region' : region,
+									}
+									diff = DeepDiff(game['game_info'], new_dict).affected_root_keys
+									if len(diff) != 0:
+										channel = bot.get_channel(int(game['channel_id']))
+										try:
+											message = await channel.fetch_message(game['message_id'])
+										except Exception as e:
+											pass
+										else:
+											embed = message.embeds[0]
+											utc = timezone('UTC')
+											date_end = dt.strptime(new_dict['date_end'], "%Y-%m-%d %H:%M:%S")
+											date_end = utc.localize(date_end)
+
+											embed.title = new_dict['title']
+											embed.timestamp = date_end
+											embed.clear_fields()
+											embed.add_field(name = f'{language[LANG]["game_price"]} ({new_dict["price"]})', value = new_dict['description'], inline = False)
+
+											label = f'{language[LANG]["not_ru_akk"]}' if new_dict['region'] == 'not_ru' else ''
+
+											if channel.is_news() and game['was_published'] == 'True':
+												embed.title = f'{new_dict["title"]} {label}'
+												embed.url = new_dict['url']
+												button = None
+											else: 
+												button = discord.ui.View()
+												button.add_item(discord.ui.Button(
+													label = f'{language[LANG]["game_link"]} {label}',
+													style = discord.ButtonStyle.success,
+													url = new_dict['url'],
+													emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+													disabled = False,
+												))
+											
+											await message.edit( 
+												embed = embed,  
+												view = button
+											)
+
+											game['game_info'].update(new_dict)
+											logger.debug(f'{new_dict["title"]} was edited')
+						elif parser == 'steam':
+							for locate, data in file_games.items():
+								if key in data:
+									new_dict = {
+										'title' : data[key]['card_name'],
+										'description' : data[key]['card_desc'],
+										'url' : data[key]['card_link'],
+										'date_start' : data[key]['start_time'],
+									}
+									diff = DeepDiff(game['game_info'], new_dict).affected_root_keys
+									if len(diff) != 0:
+										print(new_dict)
+										channel = bot.get_channel(int(game['channel_id']))
+										try:
+											message = await channel.fetch_message(game['message_id'])
+										except Exception as e:
+											pass
+										else:
+											utc = timezone('UTC')
+											date_start = dt.strptime(new_dict['date_start'], "%Y-%m-%d %H:%M:%S")
+											date_start = utc.localize(date_start)
+
+											embed = message.embeds[0]
+											embed.title = new_dict['title']
+											embed.timestamp = date_start
+											embed.clear_fields()
+											embed.add_field(name = '', value = new_dict['description'], inline = False)
+
+											if channel.is_news() and game['anounce_publish'] == 'True':
+												embed.url = new_dict['url']
+												button = None
+											else:
+												button = discord.ui.View()
+												button.add_item(discord.ui.Button(
+													label = f'{language[LANG]["game_link"]}',
+													style = discord.ButtonStyle.success,
+													url = new_dict['url'],
+													emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+													disabled = False,
+												))
+											
+											await message.edit( 
+												embed = embed, 
+												view = button,
+											)
+
+											game['game_info'].update(new_dict)
+											logger.debug(f'{new_dict["title"]} was edited')
+
+	with open(files['channels'], 'w', encoding='utf-8') as file:
+		json.dump(channels, file, ensure_ascii=False, indent=4)
+
+	#logger.debug(f'Message was editied')
+								
+@tasks.loop(minutes=10.0, reconnect=True)
+async def bot_loop_delete_message():
+	with open(files['channels'], 'r', encoding='utf-8') as file:
+		channels = json.load(file)
 
 	for guild in bot.guilds:
-		check = channels[str(guild.id)]
-		if len(check['games']) != 0:
-			for key, game in check['games'].items():
-				if game['deleted'] != 'True':
-					timenow = dt.utcnow()
-					date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
-					if date_end < timenow:
-						channel = bot.get_channel(int(game['channel_id']))
-						try:
-							message = await channel.fetch_message(game['message_id'])
-						except Exception as e:
-							pass
-						else:
-							if check['message_after'] == 'Delete':
-								await message.delete()
-							elif check['message_after'] == 'Edit':
-								GM = games[key]
+		for parser in thumbnails.keys():
+			with open(files[parser], 'r', encoding='utf-8') as file:
+				file_games = json.load(file)
 
-								embed = discord.Embed()
-								embed.title = GM['title']
-								embed.colour = discord.Color.green()
-								utc = timezone('UTC')
-								time = dt.strptime(GM['date_end'], "%Y-%m-%d %H:%M:%S")
-								time = utc.localize(time)
-								embed.timestamp = time
-								price = GM['price']
-								embed.add_field(name = f'{language[LANG]["game_price"]} ({price})', value = GM['description'], inline = False)
-								embed.set_image(url=GM['image'])
-								embed.set_thumbnail(url='https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.icon-icons.com%2Ficons2%2F2429%2FPNG%2F512%2Fepic_games_logo_icon_147294.png&f=1&nofb=1&ipt=fcb317278eedd075465f00e4f3a6c99f2a970dc635bd138a317b027b936d260e&ipo=images')
-								embed.set_footer(text = f'{language[LANG]["discount_ended"]}')
+			file_guild = channels[str(guild.id)][parser]
+
+			if len(file_guild['games']) != 0:
+				for key, game in file_guild['games'].items():
+					if game['expired_check'] != 'True':
+						if parser == 'epic_games':
+							timenow = dt.utcnow()
+							date_end = dt.strptime(game['game_info']['date_end'], "%Y-%m-%d %H:%M:%S")
+							expired = True if date_end < timenow else False
+						elif parser == 'steam':
+							expired = False
+							if key in file_games['steam_links']:
+								expired = True if file_games['steam_links'][key]['card_expired'] == 'True' else False
+						
+						if expired:
+							channel = bot.get_channel(int(game['channel_id']))
+							try:
+								message = await channel.fetch_message(game['message_id'])
+							except Exception as e:
+								pass
+							else:
+								if file_guild['message_after'] == 'Delete':
+									await message.delete()
+								elif file_guild['message_after'] == 'Edit':
+									channel_game = game['game_info']
+
+									embed = message.embeds[0]
+									embed.colour = discord.Color.red()
+									embed.set_footer(text = f'{language[LANG]["discount_ended"]}')
+									
+									if parser == 'steam':
+										embed.timestamp = dt.now(timezone('UTC')) 
+
+									label = ''
+									if parser == 'epic_games':
+										label = f'{language[LANG]["not_ru_akk"]}' if channel_game['region'] == 'not_ru' else ''
+									
+									if channel.is_news() and game['was_published'] == 'True':
+										button = None
+										embed.url = None
+									else:
+										button = discord.ui.View()
+										button.add_item(discord.ui.Button(
+											label = f'{language[LANG]["game_link"]} {label}',
+											style = discord.ButtonStyle.success,
+											url = channel_game['url'],
+											emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+											disabled = True,
+										))
+
+									await message.edit(
+										embed = embed,
+										view = button,
+									)
+							finally:
+								logger.info(f'Delete_MSG {parser} || Game : {game["game_info"]["title"]} || Guild : {guild.name}')
 								
-								label = f'{language[LANG]["not_ru_akk"]}' if GM['key'] == 'not_ru' else ''
-								button = discord.ui.View()
-								button.add_item(discord.ui.Button(
-									label = f'{language[LANG]["game_link"]} {label}',
-									style = discord.ButtonStyle.success,
-									url = GM['url'],
-									emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
-									disabled = True,
-								))
-
-								await message.edit(
-									embed = embed,
-									view = button,
-								)
-						finally:
-							logger.info(f'Start bot_loop_delete_message || Game : {game["game_info"]["title"]} || Guild : {guild.name}')
-							
-							check['games'][str(key)] = {
-								'date_end': str(game['date_end']),
-								'message_id': str(game['message_id']),
-								'channel_id': str(game['channel_id']),
-								'deleted': str(True),
-								'game_info': game['game_info'],
-							}
-
-							channels[str(guild.id)] = {
-								'channel': str(check['channel']),
-								'status': str(check['status']),
-								'role': str(check['role']),
-								'message_after': str(check['message_after']),
-								'admin_settings' : check['admin_settings'],
-								'games': check['games'],
-							}
+								file_guild['games'][str(key)].update({
+									'expired_check': str(True)
+								})
 
 	with open(files['channels'], 'w', encoding='utf-8') as file:
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 						
 @tasks.loop(minutes=5.0, reconnect=True)
 async def bot_loop_send_message():
-	logger.info(f'Start bot_loop_send_message and function check_games')
-	game_informer.check_games()
+	await epic_informer.start_parse()
+	await steam_informer.start_parse()
 
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
 
-	with open(files['games'], 'r', encoding='utf-8') as file:
-		games = json.load(file)
-
 	for guild in bot.guilds:
-		check = channels[str(guild.id)]
-		if check['channel'] != 'None' and check['status'] != 'False':
-			channel = bot.get_channel(int(check['channel']))
-			if channel == None:
-				continue
-			for key, game in games.items():
-				if key not in check['games']:
-					if game['expired'] == 'False' and game['started'] == 'True':
-						utc = timezone('UTC')
-						date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
-						date_for_json = date_end
-						date_end = utc.localize(date_end)
+		for parser in thumbnails.keys():
 
-						embed = discord.Embed()
-						embed.title = game['title']
-						embed.colour = discord.Color.green()
-						embed.timestamp = date_end
-						price = game['price']
-						embed.add_field(name = f'{language[LANG]["game_price"]} ({price})', value = game['description'], inline = False)
-						embed.set_image(url=game['image'])
-						embed.set_thumbnail(url='https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.icon-icons.com%2Ficons2%2F2429%2FPNG%2F512%2Fepic_games_logo_icon_147294.png&f=1&nofb=1&ipt=fcb317278eedd075465f00e4f3a6c99f2a970dc635bd138a317b027b936d260e&ipo=images')
-						embed.set_footer(text = f'{language[LANG]["discount_will_ended"]}')
-						
-						label = f'{language[LANG]["not_ru_akk"]}' if game['key'] == 'not_ru' else ''
+			with open(files[parser], 'r', encoding='utf-8') as file:
+				game_file = json.load(file)
 
-						button = discord.ui.View()
-						button.add_item(discord.ui.Button(
-							label = f'{language[LANG]["game_link"]} {label}',
-							style = discord.ButtonStyle.success,
-							url = game['url'],
-							emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
-							disabled = False,
-						))
-						
-						content = ''
+			file_guild = channels[str(guild.id)][parser]
+			if file_guild['channel'] != 'None' and file_guild['status'] != 'False':
+				channel = bot.get_channel(int(file_guild['channel']))
+				
+				if channel == None:
+					continue
+				
+				for key, unique in game_file.items():
+					for k, game in unique.items():
+						if k not in file_guild['games']:
+							if parser == 'epic_games':
+								if game['expired'] == 'False' and game['started'] == 'True':
+									utc = timezone('UTC')
+									date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
+									date_end = utc.localize(date_end)
 
-						if guild.get_role(int(check['role'])) != None:
-							content = guild.get_role(int(check['role'])).mention if guild.get_role(int(check['role'])).name != '@everyone' else '@everyone'
-						
-						message = await channel.send(
-							content = content, 
-							embed = embed, 
-							allowed_mentions = discord.AllowedMentions.all(), 
-							view = button,
-						)
+									embed = discord.Embed()
+									embed.title = game['title']
+									embed.colour = discord.Color.green()
+									embed.timestamp = date_end
+									embed.add_field(name = f'{language[LANG]["game_price"]} ({game["price"]})', value = game['description'], inline = False)
+									embed.set_image(url=game['image'])
+									embed.set_thumbnail(url=thumbnails[parser])
+									embed.set_footer(text = f'{language[LANG]["discount_will_ended"]}')
+									
+									label = f'{language[LANG]["not_ru_akk"]}' if key == 'not_ru' else ''
 
-						game_json = {
-		                    'title': str(game['title']),
-		                    'description': str(game['description']),
-		                    'url': str(game['url']),
-		                    'price': str(game['price']),
-		                    'key': str(game['key']),
-						}
+									if channel.is_news() and file_guild['anounce_publish'] == 'True':
+										embed.url = game['url']
+										embed.title = f'{game["title"]} {label}'
+										button = None
+										published = True
+									else: 
+										published = False
 
-						games_channel = channels[str(guild.id)]['games']
-						games_channel[str(game['id'])] = {
-							'date_end': str(date_for_json),
-							'message_id': str(message.id),
-							'channel_id': str(check['channel']),
-							'deleted': str(False),
-							'game_info': game_json,
-						}
+										button = discord.ui.View()
+										button.add_item(discord.ui.Button(
+											label = f'{language[LANG]["game_link"]} {label}',
+											style = discord.ButtonStyle.success,
+											url = game['url'],
+											emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+											disabled = False,
+										))
+									
+									content = ''
 
-						channels[str(guild.id)] = {
-							'channel': str(check['channel']),
-							'status': str(check['status']),
-							'role': str(check['role']),
-							'message_after': str(check['message_after']),
-							'admin_settings': check['admin_settings'],
-							'games': games_channel,
-						}
+									if guild.get_role(int(file_guild['role'])) != None:
+										content = guild.get_role(int(file_guild['role'])).mention
 
-						logger.info(f'Game : {game["title"]} was posted in {guild.name}')
+									message = await channel.send(
+										content = content, 
+										embed = embed, 
+										allowed_mentions = discord.AllowedMentions.all(), 
+										view = button,
+									)
 
+									if published:
+										await message.publish()
+										
+									game_json = {
+					                    'title': str(game['title']),
+					                    'description': str(game['description']),
+					                    'url': str(game['url']),
+					                    'price': str(game['price']),
+					                    'date_end' : str(game['date_end']),
+					                    'region' : str(key)
+									}
+
+									games_channel = {
+										str(k) : {
+											'message_id': str(message.id),
+											'channel_id': str(file_guild['channel']),
+											'expired_check': str(False),
+											'was_changed_by_user' : str(False),
+											'was_published' : str(published),
+											'game_info': game_json
+										}
+									}
+
+									file_guild['games'].update(games_channel)
+
+									logger.info(f'Send_MSG {parser} || Game : {game["title"]} was posted in {guild.name}')
+							elif parser == 'steam':
+								if game['card_expired'] == 'False':
+									utc = timezone('UTC')
+									date_start = dt.strptime(game['start_time'], "%Y-%m-%d %H:%M:%S")
+									date_start = utc.localize(date_start)
+
+									embed = discord.Embed()
+									embed.title = game['card_name']
+									embed.colour = discord.Color.green()
+									embed.timestamp = date_start
+									embed.add_field(name = '', value = game['card_desc'], inline = False)
+									embed.set_image(url=game['card_image'])
+									embed.set_thumbnail(url=thumbnails[parser])
+									embed.set_footer(text = f'{language[LANG]["discount_started"]}')
+									
+									if channel.is_news() and file_guild['anounce_publish'] == 'True':
+										embed.url = game['card_link']
+										button = None
+										published = True
+									else: 
+										published = False
+
+										button = discord.ui.View()
+										button.add_item(discord.ui.Button(
+											label = f'{language[LANG]["game_link"]}',
+											style = discord.ButtonStyle.success,
+											url = game['card_link'],
+											emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+											disabled = False,
+										))
+									
+									content = ''
+
+									if guild.get_role(int(file_guild['role'])) != None:
+										content = guild.get_role(int(file_guild['role'])).mention
+									
+									message = await channel.send(
+										content = content, 
+										embed = embed, 
+										allowed_mentions = discord.AllowedMentions.all(), 
+										view = button,
+									)
+
+									if published:
+										await message.publish()
+
+									game_json = {
+					                    'title': str(game['card_name']),
+					                    'description': str(game['card_desc']),
+					                    'url': str(game['card_link']),
+					                    'date_start' : str(game['start_time']),
+									}
+
+									games_channel = {
+										str(k) : {
+											'message_id': str(message.id),
+											'channel_id': str(file_guild['channel']),
+											'expired_check': str(False),
+											'was_changed_by_user' : str(False),
+											'was_published' : str(published),
+											'game_info': game_json
+										}
+									}
+
+									file_guild['games'].update(games_channel)
+
+									logger.info(f'Send_MSG {parser} || Game : {game["card_name"]} was posted in {guild.name}')
+							
 	with open(files['channels'], 'w', encoding='utf-8') as file:
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 
@@ -413,12 +621,12 @@ def is_owner():
 		return str(interaction.user.id) == ownerID
 	return app_commands.check(predicate)
 
-def in_list_users():
-	def predicate(interaction: discord.Interaction) -> bool:
-		with open(files['users'], 'r', encoding='utf-8') as file:
-			data = json.load(file)
-		return True if data[str(interaction.guild_id)][str(interaction.user.id)]['has_permissions'] == 'True' else False
-	return app_commands.check(predicate)
+# def in_list_users():
+# 	def predicate(interaction: discord.Interaction) -> bool:
+# 		with open(files['users'], 'r', encoding='utf-8') as file:
+# 			data = json.load(file)
+# 		return True if data[str(interaction.guild_id)][str(interaction.user.id)]['has_permissions'] == 'True' else False
+# 	return app_commands.check(predicate)
 
 def has_channel_permissions():
 	def predicate(interaction: discord.Interaction) -> bool:
@@ -438,59 +646,91 @@ def has_channel_permissions():
 			if interaction.user.get_role(int(role)) != None:
 				return True
 
-		with open(files['users'], 'r', encoding='utf-8') as file:
-			data = json.load(file)
-		return True if data[str(interaction.guild_id)][str(interaction.user.id)]['has_permissions'] == 'True' else False
-		
+		# with open(files['users'], 'r', encoding='utf-8') as file:
+		# 	data = json.load(file)
+		# return True if data[str(interaction.guild_id)][str(interaction.user.id)]['has_permissions'] == 'True' else False
+		return False
+
 	return app_commands.check(predicate)
 
-@bot.tree.command(name='dev_uni_test')
-@app_commands.guild_only()
-@is_owner()
-async def dev_uni_test(interaction: discord.Interaction):
-	with open(files['games'], 'r', encoding='utf-8') as file:
-		games = json.load(file)
+def is_owner_not_decorator(interaction: discord.Interaction) -> bool:
+	return str(interaction.user.id) == ownerID
+
+# def in_list_users_not_decorator(interaction: discord.Interaction) -> bool:
+	# with open(files['users'], 'r', encoding='utf-8') as file:
+	# 	data = json.load(file)
+	# return True if data[str(interaction.guild_id)][str(interaction.user.id)]['has_permissions'] == 'True' else False
+
+def has_channel_permissions_not_decorator(interaction: discord.Interaction) -> bool:
+	if str(interaction.user.id) == ownerID:
+		return True
+
+	if interaction.user.guild_permissions.administrator:
+		return True
 
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
 
-	for key, game in games.items():
-		if game['expired'] == 'False' and game['started'] == 'True':
-			embed = discord.Embed()
-			embed.title = game['title']
-			embed.colour = discord.Color.green()
-			utc = timezone('UTC')
-			time = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
-			time = utc.localize(time)
-			embed.timestamp = time
-			price = game['price']
-			embed.add_field(name = f'{language[LANG]["game_price"]} ({price})', value = game['description'], inline = False)
-			embed.set_image(url=game['image'])
-			embed.set_thumbnail(url='https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.icon-icons.com%2Ficons2%2F2429%2FPNG%2F512%2Fepic_games_logo_icon_147294.png&f=1&nofb=1&ipt=fcb317278eedd075465f00e4f3a6c99f2a970dc635bd138a317b027b936d260e&ipo=images')
-			embed.set_footer(text = f'{language[LANG]["discount_will_ended"]}')
-			
-			button = discord.ui.View()
-			button.add_item(discord.ui.Button(
-				label = f'{language[LANG]["game_link"]}',
-				style = discord.ButtonStyle.success,
-				url = game['url'],
-				emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
-				disabled = False,
-			))
+	if str(interaction.user.id) in channels[str(interaction.guild_id)]['admin_settings']['users']:
+		return True
 
-			await interaction.response.send_message(
-				content='', 
-				embed = embed, 
-				allowed_mentions = discord.AllowedMentions.all(), 
-				view = button,
-				delete_after = 10.0,
-			)
+	for role in channels[str(interaction.guild_id)]['admin_settings']['roles']:
+		if interaction.user.get_role(int(role)) != None:
+			return True
 
-async def embedSettignsMenu(interaction: discord.Interaction):
+	# with open(files['users'], 'r', encoding='utf-8') as file:
+	# 	data = json.load(file)
+	# return True if data[str(interaction.guild_id)][str(interaction.user.id)]['has_permissions'] == 'True' else False
+	return False
+
+# @bot.tree.command(name='dev_uni_test')
+# @app_commands.guild_only()
+# @is_owner()
+# async def dev_uni_test(interaction: discord.Interaction):
+# 	with open(files['epic_games'], 'r', encoding='utf-8') as file:
+# 		games = json.load(file)
+
+# 	with open(files['channels'], 'r', encoding='utf-8') as file:
+# 		channels = json.load(file)
+
+# 	for key, region in games.items():
+# 		for k, game in region.items():
+# 			if game['expired'] == 'False' and game['started'] == 'True':
+# 				embed = discord.Embed()
+# 				embed.title = game['title']
+# 				embed.colour = discord.Color.green()
+# 				utc = timezone('UTC')
+# 				time = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
+# 				time = utc.localize(time)
+# 				embed.timestamp = time
+# 				price = game['price']
+# 				embed.add_field(name = f'{language[LANG]["game_price"]} ({price})', value = game['description'], inline = False)
+# 				embed.set_image(url=game['image'])
+# 				embed.set_thumbnail(url='https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fcdn.icon-icons.com%2Ficons2%2F2429%2FPNG%2F512%2Fepic_games_logo_icon_147294.png&f=1&nofb=1&ipt=fcb317278eedd075465f00e4f3a6c99f2a970dc635bd138a317b027b936d260e&ipo=images')
+# 				embed.set_footer(text = f'{language[LANG]["discount_will_ended"]}')
+				
+# 				button = discord.ui.View()
+# 				button.add_item(discord.ui.Button(
+# 					label = f'{language[LANG]["game_link"]}',
+# 					style = discord.ButtonStyle.success,
+# 					url = game['url'],
+# 					emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+# 					disabled = False,
+# 				))
+
+# 				await interaction.response.send_message(
+# 					content='', 
+# 					embed = embed, 
+# 					allowed_mentions = discord.AllowedMentions.all(), 
+# 					view = button,
+# 					delete_after = 10.0,
+# 				)
+
+async def embedSettignsMenu(interaction: discord.Interaction, parser):
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
 		
-	guild = channels[str(interaction.guild.id)]
+	guild = channels[str(interaction.guild.id)][parser]
 	
 	channel_name = language[LANG]["no_channel"]
 	if bot.get_channel(int(guild['channel'])) != None:
@@ -510,7 +750,7 @@ async def embedSettignsMenu(interaction: discord.Interaction):
 	start_stop_name = language[LANG]["bot_started"] if guild['status'] == 'True' else language[LANG]["bot_stoped"]
 
 	embed = discord.Embed()
-	embed.title = f'{language[LANG]["settings"]}'
+	embed.title = f'{language[LANG][f"settings_{parser}"]}'
 	embed.add_field(name = f'{language[LANG]["current_channel"]}', value = channel_name, inline = True)
 	embed.add_field(name = '\u200b', value = '\u200b', inline = True) # Empty Field
 	embed.add_field(name = f'{language[LANG]["current_role"]}', value = role_name, inline = True)
@@ -520,7 +760,7 @@ async def embedSettignsMenu(interaction: discord.Interaction):
 	embed.set_author(name = interaction.user.name, icon_url = interaction.user.display_avatar.url)
 	embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
 	embed.colour = discord.Color.green()
-	embed.timestamp = dt.now(timezone('UTC'))
+	#embed.timestamp = dt.now(timezone('UTC'))
 
 	return embed
 
@@ -550,17 +790,13 @@ class _SubmitModal(discord.ui.Modal, title = language[LANG]["reset_submit_modal"
 			channels = json.load(file)
 
 		with open(files['channels'], 'w', encoding='utf-8') as file:
-			channels[str(interaction.guild.id)] = {
+			channels[str(interaction.guild.id)][self.parser].update({
 				'channel': str(0),
+				'anounce_publish' : str(False),
 				'status': str(False),
 				'role': str(0),
-				'message_after': str(None),
-				'admin_settings' : {
-					'roles' : [],
-					'users' : []
-				},
-				'games': channels[str(interaction.guild.id)]['games'],
-			}
+				'message_after': str(None)
+			})
 
 			json.dump(channels, file, ensure_ascii=False, indent=4)
 
@@ -583,11 +819,13 @@ class _ResetMenu(discord.ui.View):
 	async def confirm_callback(self, interaction: discord.Interaction, button):
 		submit = _SubmitModal()
 		submit.view = self
+		submit.parser = self.parser
 		await interaction.response.send_modal(submit)
 
 class _ReturnButton(discord.ui.Button):
-	def __init__(self, view):
+	def __init__(self, view, parser):
 		self.menu = view
+		self.parser = parser
 		super().__init__(
 			label = language[LANG]["return_to_settings"],
 			style = discord.ButtonStyle.danger,
@@ -595,14 +833,48 @@ class _ReturnButton(discord.ui.Button):
 		)
 
 	async def callback(self, interaction: discord.Interaction):
-		await interaction.response.edit_message(content = '', embed = await embedSettignsMenu(interaction), view = self.menu)
+		await interaction.response.edit_message(content = '', embed = await embedSettignsMenu(interaction, self.parser), view = self.menu)
+
+class _StatusAnnounceButton(discord.ui.Button):
+	def __init__(self, view, interaction, parser):
+		with open(files['channels'], 'r', encoding='utf-8') as file:
+			channels = json.load(file)
+
+		self.menu = view
+		self.interaction = interaction
+		self.parser = parser
+		super().__init__(
+			label = language[LANG]["anounce_publish_start"] if channels[str(self.interaction.guild_id)][self.parser]['anounce_publish'] == 'False' else language[LANG]["anounce_publish_stop"],
+			style = discord.ButtonStyle.success if channels[str(self.interaction.guild_id)][self.parser]['anounce_publish'] == 'False' else discord.ButtonStyle.danger,
+			row = 1,
+		)
+
+	async def callback(self, interaction: discord.Interaction):
+		with open(files['channels'], 'r', encoding='utf-8') as file:
+			channels = json.load(file)
+
+		with open(files['channels'], 'w', encoding='utf-8') as file:
+			channels[str(interaction.guild_id)][self.parser].update({
+				'anounce_publish': str(True) if channels[str(interaction.guild_id)][self.parser]['anounce_publish'] == 'False' else str(False),
+			})
+
+			json.dump(channels, file, ensure_ascii=False, indent=4)
+
+		self.menu.remove_item(self)
+		self.label = language[LANG]["anounce_publish_start"] if channels[str(interaction.guild_id)][self.parser]['anounce_publish'] == 'False' else language[LANG]["anounce_publish_stop"]
+		self.style = style = discord.ButtonStyle.success if channels[str(self.interaction.guild_id)][self.parser]['anounce_publish'] == 'False' else discord.ButtonStyle.danger
+		self.menu.add_item(self)
+
+		logger.info(f'Bot publish message setting was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({channels[str(interaction.guild_id)][self.parser]["anounce_publish"] == "False"} -> {channels[str(interaction.guild_id)][self.parser]["anounce_publish"] == "True"})')
+
+		await interaction.response.edit_message(view = self.menu)
 
 class _ChannelSettingsMenu(discord.ui.View):
-	def update_embed(self, interaction, last_channel):
+	async def update_embed(self, interaction, last_channel):
 		with open(files['channels'], 'r', encoding='utf-8') as file:
 			channels = json.load(file)
 		
-		channel = channels[str(interaction.guild.id)]['channel']
+		channel = channels[str(interaction.guild.id)][self.parser]['channel']
 		channel_name = bot.get_channel(int(channel)).name if bot.get_channel(int(channel)) != None else language[LANG]['no_channel']
 
 		embed = discord.Embed()
@@ -611,18 +883,20 @@ class _ChannelSettingsMenu(discord.ui.View):
 		embed.add_field(name = f'{language[LANG]["last_channel"]}', value = last_channel, inline = False)
 		embed.colour = discord.Color.green()
 		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
-		embed.timestamp = dt.now(timezone('UTC'))
+		#embed.timestamp = dt.now(timezone('UTC'))
 		
 		return embed
 
-	async def update_message(self, interaction):
+	async def update_message(self, interaction, last_channel_par):
+		self.clear_items()
+
 		with open(files['channels'], 'r', encoding='utf-8') as file:
 			channels = json.load(file)
 
-		channel = channels[str(interaction.guild.id)]['channel']
+		channel = channels[str(interaction.guild.id)][self.parser]['channel']
 
 		channel_select = discord.ui.ChannelSelect(
-			channel_types = [discord.ChannelType.text],
+			channel_types = [discord.ChannelType.text, discord.ChannelType.news],
 			min_values=0,
 			max_values=1,
 			placeholder = language[LANG]["choose_channel"],
@@ -644,34 +918,40 @@ class _ChannelSettingsMenu(discord.ui.View):
 				last_channel_name = last_channel.name
 
 			with open(files['channels'], 'w', encoding='utf-8') as file:
-				channels[str(interaction.guild_id)] = {
+				channels[str(interaction.guild_id)][self.parser].update({
 					'channel': str(channel_new_id),
-					'status': str(channels[str(interaction.guild_id)]['status']),
-					'role': str(channels[str(interaction.guild_id)]['role']),
-					'message_after': str(channels[str(interaction.guild_id)]['message_after']),
-					'admin_settings' : channels[str(interaction.guild_id)]['admin_settings'],
-					'games': channels[str(interaction.guild_id)]['games'],
-				}
+				})
 
 				json.dump(channels, file, ensure_ascii=False, indent=4)
 
 			logger.info(f'Channel was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({last_channel_name} -> {channel_new_name})')
-			embed = self.update_embed(interaction, last_channel_name)
-			await interaction.response.edit_message(embed = embed, view = self)
+			#embed = await self.update_embed(interaction, last_channel_name)
+			#await interaction.response.edit_message(embed = embed, view = self)
+			await self.update_message(interaction, last_channel_name)
 
 		channel_select.callback = select_callback
 
 		self.add_item(channel_select)
-		self.add_item(_ReturnButton(self.menu))
-		embed = self.update_embed(interaction, '')
+		self.add_item(_ReturnButton(self.menu, self.parser))
+		if interaction.guild.get_channel(int(channel)) != None and interaction.guild.get_channel(int(channel)).is_news():
+			self.add_item(_StatusAnnounceButton(self, interaction, self.parser))
+		elif channels[str(interaction.guild.id)][self.parser]['anounce_publish'] == 'True':
+			with open(files['channels'], 'w', encoding='utf-8') as file:
+				channels[str(interaction.guild_id)][self.parser].update({
+					'anounce_publish': str(False)
+				})
+
+				json.dump(channels, file, ensure_ascii=False, indent=4)
+			logger.info(f'Bot publish message setting was |automaticaly| changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({channels[str(interaction.guild_id)][self.parser]["anounce_publish"] == "False"} -> False')
+		embed = await self.update_embed(interaction, last_channel_par)
 		await interaction.response.edit_message(embed = embed, view = self)
 
 class _RoleSettingsMenu(discord.ui.View):
-	def update_embed(self, interaction, last_role):
+	async def update_embed(self, interaction, last_role):
 		with open(files['channels'], 'r', encoding='utf-8') as file:
 			channels = json.load(file)
 		
-		role = channels[str(interaction.guild.id)]['role']
+		role = channels[str(interaction.guild.id)][self.parser]['role']
 		role_name = interaction.guild.get_role(int(role)).name if interaction.guild.get_role(int(role)) != None else language[LANG]['no_role']
 
 		embed = discord.Embed()
@@ -680,7 +960,7 @@ class _RoleSettingsMenu(discord.ui.View):
 		embed.add_field(name = f'{language[LANG]["last_role"]}', value = last_role, inline = False)
 		embed.colour = discord.Color.green()
 		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
-		embed.timestamp = dt.now(timezone('UTC'))
+		#embed.timestamp = dt.now(timezone('UTC'))
 		
 		return embed
 
@@ -688,7 +968,7 @@ class _RoleSettingsMenu(discord.ui.View):
 		with open(files['channels'], 'r', encoding='utf-8') as file:
 			channels = json.load(file)
 
-		role = channels[str(interaction.guild.id)]['role']
+		role = channels[str(interaction.guild.id)][self.parser]['role']
 
 		role_select = discord.ui.RoleSelect(
 			min_values=0,
@@ -712,26 +992,21 @@ class _RoleSettingsMenu(discord.ui.View):
 				last_role_name = last_role.name
 			
 			with open(files['channels'], 'w', encoding='utf-8') as file:
-				channels[str(interaction.guild_id)] = {
-					'channel': str(channels[str(interaction.guild_id)]['channel']),
-					'status': str(channels[str(interaction.guild_id)]['status']),
+				channels[str(interaction.guild_id)][self.parser].update({
 					'role': str(role_new_id),
-					'message_after': str(channels[str(interaction.guild_id)]['message_after']),
-					'admin_settings' : channels[str(interaction.guild_id)]['admin_settings'],
-					'games': channels[str(interaction.guild_id)]['games'],
-				}
+				})
 
 				json.dump(channels, file, ensure_ascii=False, indent=4)
 
 			logger.info(f'Role was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({last_role_name} -> {role_new_name})')
-			embed = self.update_embed(interaction, last_role_name)
+			embed = await self.update_embed(interaction, last_role_name)
 			await interaction.response.edit_message(embed = embed, view = self)
 	
 		role_select.callback = select_callback
 
 		self.add_item(role_select)
-		self.add_item(_ReturnButton(self.menu))
-		embed = self.update_embed(interaction, '')
+		self.add_item(_ReturnButton(self.menu, self.parser))
+		embed = await self.update_embed(interaction, '')
 		await interaction.response.edit_message(embed = embed, view = self)
 
 class _MessageAfterSettingsMenu(discord.ui.View):
@@ -739,7 +1014,7 @@ class _MessageAfterSettingsMenu(discord.ui.View):
 		with open(files['channels'], 'r', encoding='utf-8') as file:
 			channels = json.load(file)
 
-		message_after = channels[str(interaction.guild.id)]['message_after']
+		message_after = channels[str(interaction.guild.id)][self.parser]['message_after']
 
 		message_after_list = {
 			'Delete' : language[LANG]["delete_message"],
@@ -764,7 +1039,7 @@ class _MessageAfterSettingsMenu(discord.ui.View):
 		embed.add_field(name = f'{language[LANG]["current_message_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = self.last_mode, inline = False)
 		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
 		embed.colour = discord.Color.green()
-		embed.timestamp = dt.now(timezone('UTC'))
+		#embed.timestamp = dt.now(timezone('UTC'))
 
 		async def select_callback(interaction: discord.Interaction):
 			message_after_name_new = message_after_list[str(message_after_select.values[0])]
@@ -776,14 +1051,9 @@ class _MessageAfterSettingsMenu(discord.ui.View):
 			
 			self.last_mode = message_after_name_new
 			with open(files['channels'], 'w', encoding='utf-8') as file:
-				channels[str(interaction.guild_id)] = {
-					'channel': str(channels[str(interaction.guild_id)]['channel']),
-					'status': str(channels[str(interaction.guild_id)]['status']),
-					'role': str(channels[str(interaction.guild_id)]['role']),
-					'message_after': str(message_after_select.values[0]),
-					'admin_settings' : channels[str(interaction.guild_id)]['admin_settings'],
-					'games': channels[str(interaction.guild_id)]['games'],
-				}
+				channels[str(interaction.guild_id)][self.parser].update({
+					'message_after': str(message_after_select.values[0])
+				})
 
 				json.dump(channels, file, ensure_ascii=False, indent=4)
 
@@ -792,12 +1062,12 @@ class _MessageAfterSettingsMenu(discord.ui.View):
 		message_after_select.callback = select_callback
 
 		self.add_item(message_after_select)
-		self.add_item(_ReturnButton(self.menu))
+		self.add_item(_ReturnButton(self.menu, self.parser))
 		await interaction.response.edit_message(embed = embed, view = self)
 
 
 class _AdminSettingsMenu(discord.ui.View):
-	def update_embed(self, interaction):
+	async def update_embed(self, interaction):
 		with open(files['channels'], 'r', encoding='utf-8') as file:
 			channels = json.load(file)
 		
@@ -808,13 +1078,13 @@ class _AdminSettingsMenu(discord.ui.View):
 		embed.title = language[LANG]["admin_settings_embed_title"]
 		embed.colour = discord.Color.green()
 		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
-		embed.timestamp = dt.now(timezone('UTC'))
+		#embed.timestamp = dt.now(timezone('UTC'))
 
-		role_names = [f'-{interaction.guild.get_role(int(role)).name}' for role in roles if interaction.guild.get_role(int(role)) != None]
+		role_names = [f'-{interaction.guild.get_role(int(role)).mention}' for role in roles if interaction.guild.get_role(int(role)) != None]
 
 		embed.add_field(name = f'{language[LANG]["admin_settings_embed_roles"]} : ', value = '\n'.join(role_names), inline = True)
 
-		user_names = [f'-{interaction.guild.get_member(int(user)).name}' for user in users if interaction.guild.get_member(int(user)) != None]
+		user_names = [f'-{interaction.guild.get_member(int(user)).mention}' for user in users if interaction.guild.get_member(int(user)) != None]
 
 		embed.add_field(name = f'{language[LANG]["admin_settings_embed_users"]} : ', value = '\n'.join(user_names), inline = True)
 				
@@ -839,17 +1109,9 @@ class _AdminSettingsMenu(discord.ui.View):
 				new_roles.append(str(role.id))
 
 			with open(files['channels'], 'w', encoding='utf-8') as file:
-				channels[str(interaction.guild_id)] = {
-					'channel': str(channels[str(interaction.guild_id)]['channel']),
-					'status': str(channels[str(interaction.guild_id)]['status']),
-					'role': str(channels[str(interaction.guild_id)]['role']),
-					'message_after': str(channels[str(interaction.guild_id)]['message_after']),
-					'admin_settings' : {
-						'roles' : new_roles,
-						'users' : channels[str(interaction.guild_id)]['admin_settings']['users']
-					},
-					'games': channels[str(interaction.guild_id)]['games'],
-				}
+				channels[str(interaction.guild_id)]['admin_settings'].update({
+					'roles' : new_roles
+				})
 
 				json.dump(channels, file, ensure_ascii=False, indent=4)
 			
@@ -857,7 +1119,7 @@ class _AdminSettingsMenu(discord.ui.View):
 			new_role_names = [f'{interaction.guild.get_role(int(role)).name}' for role in new_roles if interaction.guild.get_role(int(role)) != None]
 			logger.warning(f'AdminSettings : roles was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ([{", ".join(role_names)}] -> [{", ".join(new_role_names)}])')
 
-			await interaction.response.edit_message(embed = self.update_embed(interaction), view = self)
+			await interaction.response.edit_message(embed = await self.update_embed(interaction), view = self)
 
 		role_select.callback = role_callback
 
@@ -873,17 +1135,9 @@ class _AdminSettingsMenu(discord.ui.View):
 				new_users.append(str(user.id))
 
 			with open(files['channels'], 'w', encoding='utf-8') as file:
-				channels[str(interaction.guild_id)] = {
-					'channel': str(channels[str(interaction.guild_id)]['channel']),
-					'status': str(channels[str(interaction.guild_id)]['status']),
-					'role': str(channels[str(interaction.guild_id)]['role']),
-					'message_after': str(channels[str(interaction.guild_id)]['message_after']),
-					'admin_settings' : {
-						'roles' : channels[str(interaction.guild_id)]['admin_settings']['roles'],
-						'users' : new_users
-					},
-					'games': channels[str(interaction.guild_id)]['games'],
-				}
+				channels[str(interaction.guild_id)]['admin_settings'].update({
+					'users' : new_users
+				})
 
 				json.dump(channels, file, ensure_ascii=False, indent=4)
 
@@ -891,26 +1145,35 @@ class _AdminSettingsMenu(discord.ui.View):
 			new_user_names = [f'{interaction.guild.get_member(int(user)).name}' for user in new_users if interaction.guild.get_member(int(user)) != None]
 			logger.warning(f'AdminSettings : users was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ([{", ".join(user_names)}] -> [{", ".join(new_user_names)}])')
 
-			await interaction.response.edit_message(embed = self.update_embed(interaction), view = self)
+			await interaction.response.edit_message(embed = await self.update_embed(interaction), view = self)
 
 		user_select.callback = user_callback
 
 		self.add_item(role_select)
 		self.add_item(user_select)
-		self.add_item(_ReturnButton(self.menu))
-		embed = self.update_embed(interaction)
+
+		embed = await self.update_embed(interaction)
 		await interaction.response.edit_message(embed = embed, view = self)
 
+	@discord.ui.button(
+		label = language[LANG]["return_to_settings"],
+		style = discord.ButtonStyle.danger,
+		row = 2,
+	)
+	async def return_to_settings(self, interaction: discord.Interaction, button):
+		await interaction.response.edit_message(content = '', embed = None, view = self.menu)
 
 class _StatusSettingsButton(discord.ui.Button):
-	def __init__(self, view, interaction):
+	def __init__(self, view, interaction, parser):
 		with open(files['channels'], 'r', encoding='utf-8') as file:
 			channels = json.load(file)
+
 		self.menu = view
 		self.interaction = interaction
+		self.parser = parser
 		super().__init__(
-			label = language[LANG]["bot_start"] if channels[str(self.interaction.guild_id)]['status'] == 'False' else language[LANG]["bot_stop"],
-			style = discord.ButtonStyle.success if channels[str(self.interaction.guild_id)]['status'] == 'False' else discord.ButtonStyle.danger,
+			label = language[LANG]["bot_start"] if channels[str(self.interaction.guild_id)][self.parser]['status'] == 'False' else language[LANG]["bot_stop"],
+			style = discord.ButtonStyle.success if channels[str(self.interaction.guild_id)][self.parser]['status'] == 'False' else discord.ButtonStyle.danger,
 			row = 1,
 		)
 
@@ -919,32 +1182,24 @@ class _StatusSettingsButton(discord.ui.Button):
 			channels = json.load(file)
 
 		with open(files['channels'], 'w', encoding='utf-8') as file:
-			channels[str(interaction.guild_id)] = {
-				'channel': str(channels[str(interaction.guild_id)]['channel']),
-				'status': str(True) if channels[str(interaction.guild_id)]['status'] == 'False' else str(False),
-				'role': str(channels[str(interaction.guild_id)]['role']),
-				'message_after': str(channels[str(interaction.guild_id)]['message_after']),
-				'admin_settings': channels[str(interaction.guild_id)]['admin_settings'],
-				'games': channels[str(interaction.guild_id)]['games'],
-			}
+			channels[str(interaction.guild_id)][self.parser].update({
+				'status': str(True) if channels[str(interaction.guild_id)][self.parser]['status'] == 'False' else str(False),
+			})
 
 			json.dump(channels, file, ensure_ascii=False, indent=4)
 
 		self.menu.remove_item(self)
-		self.label = language[LANG]["bot_start"] if channels[str(interaction.guild_id)]['status'] == 'False' else language[LANG]["bot_stop"]
-		self.style = style = discord.ButtonStyle.success if channels[str(self.interaction.guild_id)]['status'] == 'False' else discord.ButtonStyle.danger
+		self.label = language[LANG]["bot_start"] if channels[str(interaction.guild_id)][self.parser]['status'] == 'False' else language[LANG]["bot_stop"]
+		self.style = style = discord.ButtonStyle.success if channels[str(self.interaction.guild_id)][self.parser]['status'] == 'False' else discord.ButtonStyle.danger
 		self.menu.add_item(self)
 
-		logger.info(f'Bot status was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({channels[str(interaction.guild_id)]["status"] == "False"} -> {channels[str(interaction.guild_id)]["status"] == "True"})')
+		logger.info(f'Bot status was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({channels[str(interaction.guild_id)][self.parser]["status"] == "False"} -> {channels[str(interaction.guild_id)][self.parser]["status"] == "True"})')
 
-		await interaction.response.edit_message(content = '', embed = await embedSettignsMenu(interaction), view = self.menu)
+		await interaction.response.edit_message(content = '', embed = await embedSettignsMenu(interaction, self.parser), view = self.menu)
 
 class _SettingsMenu(discord.ui.View):
 	async def update_message(self, interaction: discord.Interaction):
-		with open(files['channels'], 'r', encoding='utf-8') as file:
-			channels = json.load(file)
-
-		embed = await embedSettignsMenu(interaction)
+		embed = await embedSettignsMenu(interaction, self.parser)
 		await interaction.response.edit_message(content = '', embed = embed, view = self)
 
 	@discord.ui.button(
@@ -960,7 +1215,8 @@ class _SettingsMenu(discord.ui.View):
 
 		channel_menu = _ChannelSettingsMenu()
 		channel_menu.menu = self
-		await channel_menu.update_message(interaction)
+		channel_menu.parser = self.parser
+		await channel_menu.update_message(interaction, '')
 
 	@discord.ui.button(
 		style = discord.ButtonStyle.primary,
@@ -970,6 +1226,7 @@ class _SettingsMenu(discord.ui.View):
 	async def need_delete_settings(self, interaction: discord.Interaction, button):
 		message_menu = _MessageAfterSettingsMenu()
 		message_menu.menu = self
+		message_menu.parser = self.parser
 		await message_menu.update_message(interaction)
 
 	@discord.ui.button(
@@ -985,7 +1242,16 @@ class _SettingsMenu(discord.ui.View):
 
 		role_menu = _RoleSettingsMenu()
 		role_menu.menu = self
+		role_menu.parser = self.parser
 		await role_menu.update_message(interaction)
+
+	@discord.ui.button(
+		label = language[LANG]["return_to_main"],
+		style = discord.ButtonStyle.danger,
+		row = 1,
+	)
+	async def return_to_choose(self, interaction: discord.Interaction, button):
+		await interaction.response.edit_message(content = '', embed = None, view = self.menu)
 
 	@discord.ui.button(
 		style = discord.ButtonStyle.danger,
@@ -995,45 +1261,38 @@ class _SettingsMenu(discord.ui.View):
 	async def reset_settings(self, interaction: discord.Interaction, button):
 		view = _ResetMenu()
 		view.guild = interaction.guild
-		_return = _ReturnButton(self)
+		view.parser = self.parser
+
+		_return = _ReturnButton(self, self.parser)
 		view.add_item(_return)
+		
 		await interaction.response.edit_message(
 			content = language[LANG]["message_reset"],
 			embed = None,
 			view = view
 		)
 
-	@discord.ui.button(
-		style = discord.ButtonStyle.secondary,
-		label = language[LANG]['admin_settings'],
-		row = 1,
-	)
-	async def admin_settings(self, interaction: discord.Interaction, button):
-		if interaction.user.guild_permissions.administrator == False and str(interaction.user.id) != ownerID:
-			await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
-			return
+class _ReturnFixMessageButton(discord.ui.Button):
+	def __init__(self, view, embed):
+		self.menu = view
+		self.embed = embed
+		super().__init__(
+			label = language[LANG]["return_to_main"],
+			style = discord.ButtonStyle.danger,
+			custom_id = '_return_fix',
+		)
 
-		admin_menu = _AdminSettingsMenu()
-		admin_menu.menu = self
-		await admin_menu.update_message(interaction)
+	async def callback(self, interaction: discord.Interaction):
+		await interaction.response.edit_message(content = '', embed = self.embed, view = self.menu)
 
-@bot.tree.command(name='uni_settings')
-@app_commands.guild_only()
-@has_channel_permissions()
-async def uni_settings(interaction: discord.Interaction):
-	view = _SettingsMenu()
-	embed = await embedSettignsMenu(interaction)
-	view.embed = embed
-	view.interaction = interaction
-	view.add_item(_StatusSettingsButton(view, interaction))
-	await interaction.response.send_message(embed = embed, view = view, ephemeral = True)
 
 class _ChangeMessageModal(discord.ui.Modal):
-	def __init__(self, game, embed, message, game_id):
+	def __init__(self, game, embed, message, game_id, parser):
 		self.game = game
 		self.embed = embed
 		self.message = message
 		self.game_id = game_id
+		self.parser = parser
 		super().__init__(title = language[LANG]["fix_message_editor"])
 
 	async def on_submit(self, interaction: discord.Interaction):
@@ -1047,46 +1306,24 @@ class _ChangeMessageModal(discord.ui.Modal):
 							return
 				options[str(_input.custom_id)] = str(_input.value)
 		
-		self.embed.title = options['title']
-		price = options['price']
-		self.embed.set_field_at(0, name = f'{language[LANG]["game_price"]} ({price})', value = options['description'], inline = False)
+		label = ''
+		if self.parser == 'epic_games':
+			self.embed.set_field_at(0, name = f'{language[LANG]["game_price"]} ({options["price"]})', value = options['description'], inline = False)
+			label = f'{language[LANG]["not_ru_akk"]}' if options['region'] == 'not_ru' else ''
+		elif self.parser == 'steam':
+			self.embed.set_field_at(0, name = '', value = options['description'], inline = False)
+			self.embed.title = options['title']
 
-		label = f'{language[LANG]["not_ru_akk"]}' if options['key'] == 'not_ru' else ''
+		with open(files['channels'], 'r', encoding='utf-8') as file:
+			channels = json.load(file)
 
+		games = channels[str(interaction.guild.id)][self.parser]['games']
+		
+		if games[str(self.game_id)]['was_published'] != 'True':
+			self.embed.title = f'{options["title"]} {label}'
+		
 		view = discord.ui.View()
-		view.add_item(discord.ui.Button(
-			label = f'{language[LANG]["game_link"]} {label}',
-			style = discord.ButtonStyle.success,
-			url = options['url'],
-			emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
-			disabled = False,
-		))
-
-		button_confirm = discord.ui.Button(
-			label = language[LANG]["fix_message_apply"],
-			style = discord.ButtonStyle.success,
-			disabled = False,
-		)
-		async def button_confirm_callback(interaction: discord.Interaction):
-			with open(files['channels'], 'r', encoding='utf-8') as file:
-				channels = json.load(file)
-
-			games = channels[str(interaction.guild.id)]['games']
-			games[str(self.game_id)]['game_info'] = options
-
-			with open(files['channels'], 'w', encoding='utf-8') as file:
-				channels[str(interaction.guild.id)] = {
-					'channel': str(channels[str(interaction.guild.id)]['channel']),
-					'status': str(channels[str(interaction.guild.id)]['status']),
-					'role': str(channels[str(interaction.guild.id)]['role']),
-					'message_after': str(channels[str(interaction.guild.id)]['message_after']),
-					'admin_settings': channels[str(interaction.guild_id)]['admin_settings'],
-					'games': games,
-				}
-
-				json.dump(channels, file, ensure_ascii=False, indent=4)
-
-			view.clear_items()
+		if games[str(self.game_id)]['was_published'] != 'True':
 			view.add_item(discord.ui.Button(
 				label = f'{language[LANG]["game_link"]} {label}',
 				style = discord.ButtonStyle.success,
@@ -1095,7 +1332,35 @@ class _ChangeMessageModal(discord.ui.Modal):
 				disabled = False,
 			))
 
-			await self.message.edit(embed = self.embed, view = view)
+		button_confirm = discord.ui.Button(
+			label = language[LANG]["fix_message_apply"],
+			style = discord.ButtonStyle.success,
+			disabled = False,
+		)
+		async def button_confirm_callback(interaction: discord.Interaction):
+			games[str(self.game_id)]['game_info'] = options
+			games[str(self.game_id)]['was_changed_by_user'] = str(True)
+
+			with open(files['channels'], 'w', encoding='utf-8') as file:
+				channels[str(interaction.guild.id)][self.parser].update({
+					'games': games,
+				})
+
+				json.dump(channels, file, ensure_ascii=False, indent=4)
+
+			if games[str(self.game_id)]['was_published'] != 'True':
+				new_view = discord.ui.View()
+				new_view.add_item(discord.ui.Button(
+					label = f'{language[LANG]["game_link"]} {label}',
+					style = discord.ButtonStyle.success,
+					url = options['url'],
+					emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+					disabled = False,
+				))
+			else:
+				new_view = None
+
+			await self.message.edit(embed = self.embed, view = new_view)
 			await interaction.response.edit_message(
 				content = language[LANG]["fix_message_edit_successful"],
 				view = None,
@@ -1148,18 +1413,14 @@ class _SubmitMessageModal(discord.ui.Modal, title = language[LANG]["fix_message_
 		with open(files['channels'], 'r', encoding='utf-8') as file:
 			channels = json.load(file)
 		
-		games = channels[str(interaction.guild.id)]['games']
-		games[str(self.game_id)]['deleted'] = str(True)
+		games = channels[str(interaction.guild.id)][self.parser]['games']
+		games[str(self.game_id)]['expired_check'] = str(True)
+		games[str(self.game_id)]['was_changed_by_user'] = str(True)
 
 		with open(files['channels'], 'w', encoding='utf-8') as file:
-			channels[str(interaction.guild.id)] = {
-				'channel': str(channels[str(interaction.guild.id)]['channel']),
-				'status': str(channels[str(interaction.guild.id)]['status']),
-				'role': str(channels[str(interaction.guild.id)]['role']),
-				'message_after': str(channels[str(interaction.guild.id)]['message_after']),
-				'admin_settings': channels[str(interaction.guild.id)]['admin_settings'],
+			channels[str(interaction.guild.id)][self.parser].update({
 				'games': games,
-			}
+			})
 
 			json.dump(channels, file, ensure_ascii=False, indent=4)
 
@@ -1173,45 +1434,55 @@ class _SubmitMessageModal(discord.ui.Modal, title = language[LANG]["fix_message_
 
 		logger.warning(f'Fix_Message : message was deleted in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({games[str(self.game_id)]["game_info"]["title"]})')
 
-@bot.tree.command(name='uni_fix_message')
-@app_commands.guild_only()
-@has_channel_permissions()
-async def uni_fix_message(interaction: discord.Interaction):
-	with open(files['channels'], 'r', encoding='utf-8') as file:
-		channels = json.load(file)
+class _FixMessageButtons(discord.ui.Button):
+	def __init__(self, menu, parser):
+		with open(files['channels'], 'r', encoding='utf-8') as file:
+			self.channels = json.load(file)
 
-	games = channels[str(interaction.guild.id)]['games']
-	def select_channel():
-		channel_select = discord.ui.Select(
+		self.parser = parser
+		self.menu = menu
+		super().__init__(
+			label = language[LANG][f"button_{self.parser}"],
+			style = discord.ButtonStyle.primary,
+			custom_id = self.parser,
+		)
+
+	async def callback(self, interaction: discord.Interaction):
+		games = self.channels[str(interaction.guild.id)][self.parser]['games']
+		game_select = discord.ui.Select(
 			options = [
 				discord.SelectOption(
 					label =	message['game_info']['title'],
 					value = str(key),
-				) for key, message in games.items() if message['deleted'] != 'True'
+				) for key, message in games.items() if message['expired_check'] != 'True'
 			],
 			placeholder = language[LANG]["fix_message_choose"],
 		)
 		async def select_callback(interaction: discord.Interaction):
-			channel = bot.get_channel(int(channels[str(interaction.guild.id)]['games'][str(channel_select.values[0])]['channel_id']))
+			channel = bot.get_channel(int(games[str(game_select.values[0])]['channel_id']))
 			try:
-				message = await channel.fetch_message(int(channels[str(interaction.guild.id)]['games'][str(channel_select.values[0])]['message_id']))
+				message = await channel.fetch_message(int(games[str(game_select.values[0])]['message_id']))
 			except Exception as e:
 				await interaction.response.send_message(content = language[LANG]["fix_message_message_not_exists"], ephemeral = True)
 			else:
 				embed = message.embeds[0]
-				game = channels[str(interaction.guild.id)]['games'][str(channel_select.values[0])]['game_info']
-				game_id = str(channel_select.values[0])
+				game = games[str(game_select.values[0])]['game_info']
+				game_id = str(game_select.values[0])
 
-				label = language[LANG]["not_ru_akk"] if game['key'] == 'not_ru' else ''
+				label = ''
+				if self.parser == 'epic_games':
+					label = language[LANG]["not_ru_akk"] if game['region'] == 'not_ru' else ''
 				
 				view = discord.ui.View()
-				view.add_item(discord.ui.Button(
-					label = f'{language[LANG]["game_link"]} {label}',
-					style = discord.ButtonStyle.success,
-					url = game['url'],
-					emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
-					disabled = False,
-				))
+
+				if games[str(game_select.values[0])]['was_published'] != 'True':
+					view.add_item(discord.ui.Button(
+						label = f'{language[LANG]["game_link"]} {label}',
+						style = discord.ButtonStyle.success,
+						url = game['url'],
+						emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+						disabled = False,
+					))
 
 				button_change = discord.ui.Button(
 					label = language[LANG]["fix_message_change_message"],
@@ -1220,17 +1491,26 @@ async def uni_fix_message(interaction: discord.Interaction):
 				)
 
 				async def button_change_callback(interaction: discord.Interaction):
-					modal = _ChangeMessageModal(game, embed, message, game_id)
+					modal = _ChangeMessageModal(game, embed, message, game_id, self.parser)
 					labels = {
-						'title': language[LANG]["fix_message_modal_title"],
-	                    'description': language[LANG]["fix_message_modal_description"],
-	                    'url': language[LANG]["fix_message_modal_url"],
-	                    'price': language[LANG]["fix_message_modal_price"],
-	                    'key': language[LANG]["fix_message_modal_key"],
+						'epic_games': {
+							'title': language[LANG]["fix_message_modal_title"],
+		                    'description': language[LANG]["fix_message_modal_description"],
+		                    'url': language[LANG]["fix_message_modal_url"],
+		                    'price': language[LANG]["fix_message_modal_price"],
+		                    'region': language[LANG]["fix_message_modal_key"],
+		                },
+						'steam': {
+							'title': language[LANG]["fix_message_modal_title"],
+		                    'description': language[LANG]["fix_message_modal_description"],
+		                    'url': language[LANG]["fix_message_modal_url"],
+		                },
 					}
 					for key, value in game.items():
+						if key.startswith('date'):
+							continue
 						check = discord.ui.TextInput(
-							label = labels[str(key)],
+							label = labels[self.parser][str(key)],
 							style = discord.TextStyle.short if key != 'description' else discord.TextStyle.long,
 							default = str(value),
 							required = True,
@@ -1255,6 +1535,7 @@ async def uni_fix_message(interaction: discord.Interaction):
 					modal.game_id = game_id
 					modal.game = game
 					modal.message = message
+					modal.parser = self.parser
 					await interaction.response.send_modal(modal)
 
 				button_delete.callback = button_delete_callback
@@ -1268,28 +1549,158 @@ async def uni_fix_message(interaction: discord.Interaction):
 					view = view,
 				)
 
-		channel_select.callback = select_callback
-		return channel_select
+		game_select.callback = select_callback
+		view = discord.ui.View()
+		view.add_item(game_select)
+		view.add_item(_ReturnFixMessageButton(self.menu, self.embed))
+		await interaction.response.edit_message(embed = None, view = view)
+		
+class _FixMessageMenu(discord.ui.View):
+	async def update_message(self, interaction: discord.Interaction):
+		self.clear_items()
 
-	options_check = [key for key, message in games.items() if message['deleted'] != 'True']
-	if len(options_check) == 0:
-		await interaction.response.send_message(language[LANG]["fix_message_no_messages"], ephemeral = True)
-		return
+		with open(files['channels'], 'r', encoding='utf-8') as file:
+			channels = json.load(file)
 
-	view = discord.ui.View()
-	view.add_item(select_channel())
-	await interaction.response.send_message(view = view, ephemeral = True)
+		items = []
+		for parser in thumbnails.keys():
+			parser_check = [k for k, message in channels[str(interaction.guild.id)][parser]['games'].items() if message['expired_check'] != 'True']
+			if len(parser_check) == 0:
+				continue
+
+			items.append(_FixMessageButtons(self, parser))
+
+		options_check = {}
+		for parser in thumbnails.keys():
+			for k, message in channels[str(interaction.guild.id)][parser]['games'].items():
+				if message['expired_check'] != 'True':
+					options_check.update({k : {parser : message['game_info']['title']}})
+
+		if len(options_check) == 0:
+			await interaction.response.send_message(language[LANG]["fix_message_no_messages"], ephemeral = True)
+			return
+
+		embed = discord.Embed()
+		embed.title = language[LANG]['fix_message_embed_title']
+		embed.colour = discord.Color.green()
+		embed.set_thumbnail(url = str(interaction.guild.icon) if interaction.guild.icon != None else 'https://www.ndca.org/co/images/stock/no-image.png')
+		#embed.timestamp = dt.now(timezone('UTC'))
+
+		epic_games_list = [f'-{game}' for inside in options_check.values() for k, game in inside.items() if k == 'epic_games' ]
+		embed.add_field(name = f'{language[LANG]["fix_message_embed_epic_games_list"]} : ', value = '\n'.join(epic_games_list), inline = True)
+		embed.add_field(name = '\u200b', value = '\u200b', inline = True) # Empty Field
+		steam_list = [f'-{game}' for inside in options_check.values() for k, game in inside.items() if k == 'steam']
+		embed.add_field(name = f'{language[LANG]["fix_message_embed_steam_list"]} : ', value = '\n'.join(steam_list), inline = True)
+
+		for item in items:
+			item.embed = embed
+			self.add_item(item)
+
+		return_button = discord.ui.Button(
+			label = language[LANG]['return_to_settings'],
+			style = discord.ButtonStyle.danger,
+		)
+
+		async def return_callback(interaction: discord.Interaction):
+			await interaction.response.edit_message(embed = None, view = self.menu)
+
+		return_button.callback = return_callback
+
+		self.add_item(return_button)
+
+		await interaction.response.edit_message(embed = embed, view = self)
+
+class _ChooseSettingsMenu(discord.ui.View):
+	@discord.ui.button(
+		style = discord.ButtonStyle.primary,
+		label = language[LANG]['button_epic_games'],
+		row = 0,
+	)
+	async def epic_games_settings(self, interaction: discord.Interaction, button):
+		epic_games_menu = _SettingsMenu()
+		epic_games_menu.parser = 'epic_games'
+		epic_games_menu.add_item(_StatusSettingsButton(epic_games_menu, interaction, 'epic_games'))
+		epic_games_menu.menu = self
+		await epic_games_menu.update_message(interaction)
+
+	@discord.ui.button(
+		style = discord.ButtonStyle.secondary,
+		label = language[LANG]['admin_settings'],
+		row = 0,
+	)
+	async def all_admin_settings(self, interaction: discord.Interaction, button):
+		if interaction.user.guild_permissions.administrator == False and str(interaction.user.id) != ownerID:
+			await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
+			return
+
+		admin_menu = _AdminSettingsMenu()
+		admin_menu.menu = self
+		await admin_menu.update_message(interaction)
+
+	@discord.ui.button(
+		style = discord.ButtonStyle.primary,
+		label = language[LANG]['button_steam'],
+		row = 0,
+	)
+	async def steam_settings(self, interaction: discord.Interaction, button):
+		steam_menu = _SettingsMenu()
+		steam_menu.parser = 'steam'
+		steam_menu.add_item(_StatusSettingsButton(steam_menu, interaction, 'steam'))
+		steam_menu.menu = self
+		await steam_menu.update_message(interaction)
+
+	@discord.ui.button(
+		style = discord.ButtonStyle.secondary,
+		label = language[LANG]['in_develop'],
+		row = 1
+	)
+	async def help_menu(self, interaction: discord.Interaction, button):
+		await interaction.response.send_message(content = language[LANG]['command_in_develop'], ephemeral = True)
+
+	@discord.ui.button(
+		style = discord.ButtonStyle.primary,
+		label = language[LANG]['fix_message_button'],
+		row = 1
+	)
+	async def fix_message(self, interaction: discord.Interaction, button):
+		fix_message_menu = _FixMessageMenu()
+		fix_message_menu.menu = self
+		await fix_message_menu.update_message(interaction)
+
+
+	@discord.ui.button(
+		style = discord.ButtonStyle.secondary,
+		label = language[LANG]['in_develop'],
+		row = 1
+	)
+	async def update_menu(self, interaction: discord.Interaction, button):
+		await interaction.response.send_message(content = language[LANG]['command_in_develop'], ephemeral = True)
+
+
+@bot.tree.command(name='uni_settings')
+@app_commands.guild_only()
+@has_channel_permissions()
+async def uni_settings(interaction: discord.Interaction):
+	view = _ChooseSettingsMenu()
+	#view.embed = embed
+	view.interaction = interaction
+	await interaction.response.send_message(embed = None, view = view, ephemeral = True)
 
 @bot.tree.command(name='uni_help')
 async def uni_help(interaction: discord.Interaction):
+		
 	embed = discord.Embed()
 	embed.title = f'{language[LANG]["help_title"]}'
-	for _, com in language[LANG]['help_commands'].items():
+	if has_channel_permissions_not_decorator(interaction):
+		for com in language[LANG]['help_commands']['admin'].values():
+			embed.add_field(name = f'{com["name"]}', value = com["description"], inline = False)
+			
+	for com in language[LANG]['help_commands']['not_admin'].values():
 		embed.add_field(name = f'{com["name"]}', value = com["description"], inline = False)
+	
 	embed.set_author(name = interaction.user.name, icon_url = interaction.user.display_avatar.url)
 	embed.set_footer(text = language[LANG]['help_footer'])
 	embed.colour = discord.Color.green()
-	embed.timestamp = dt.now(timezone('UTC'))
 
 	await interaction.response.send_message(embed = embed, ephemeral = True)
 
@@ -1481,29 +1892,29 @@ async def uni_ping(interaction: discord.Interaction):
 
 # 	await interaction.response.send_message(f'All ready {interaction.user.mention}! Bot was stoped!', ephemeral=True)
 
-@bot.tree.command(name='dev_uni_give_permissions')
-@app_commands.guild_only()
-@app_commands.describe(boolean = language[LANG]["give_permissions_describe"])
-@is_owner()
-async def dev_uni_give_permissions(interaction: discord.Interaction, user: discord.Member, boolean: bool):
-	if user.bot:
-		await interaction.response.send_message(content = f'{language[LANG]["give_permissions_error_bot"]}', ephemeral = True)
-		return
+# @bot.tree.command(name='dev_uni_give_permissions')
+# @app_commands.guild_only()
+# @app_commands.describe(boolean = language[LANG]["give_permissions_describe"])
+# @is_owner()
+# async def dev_uni_give_permissions(interaction: discord.Interaction, user: discord.Member, boolean: bool):
+# 	if user.bot:
+# 		await interaction.response.send_message(content = f'{language[LANG]["give_permissions_error_bot"]}', ephemeral = True)
+# 		return
 		
-	with open(files['users'], 'r', encoding='utf-8') as file:
-		data = json.load(file)
+# 	with open(files['users'], 'r', encoding='utf-8') as file:
+# 		data = json.load(file)
 
-	with open(files['users'], 'w', encoding='utf-8') as file:
-		check = data[str(interaction.guild_id)]
-		check[str(user.id)] = {
-			'name': str(check[str(user.id)]['name']),
-			'has_permissions': str(boolean),
-		}
-		data[str(interaction.guild_id)] = check
+# 	with open(files['users'], 'w', encoding='utf-8') as file:
+# 		check = data[str(interaction.guild_id)]
+# 		check[str(user.id)] = {
+# 			'name': str(check[str(user.id)]['name']),
+# 			'has_permissions': str(boolean),
+# 		}
+# 		data[str(interaction.guild_id)] = check
 
-		json.dump(data, file, ensure_ascii=False, indent=4)
+# 		json.dump(data, file, ensure_ascii=False, indent=4)
 
-	await interaction.response.send_message(content = f'{language[LANG]["give_permissions_all_ready"]}! {user.name} {language[LANG]["give_permissions_new_status"]} : {boolean}.', ephemeral = True)
+# 	await interaction.response.send_message(content = f'{language[LANG]["give_permissions_all_ready"]}! {user.name} {language[LANG]["give_permissions_new_status"]} : {boolean}.', ephemeral = True)
 
 # @set_channel.error
 # async def set_channel_error(interaction: discord.Interaction, error):
@@ -1530,19 +1941,19 @@ async def dev_uni_give_permissions(interaction: discord.Interaction, user: disco
 # 	if isinstance(error, app_commands.errors.MissingPermissions):
 # 		await interaction.response.send_message(f'{interaction.user.mention} You don\'t have enough permissions', ephemeral=True)
 
-@dev_uni_test.error
-async def dev_uni_test_error(interaction: discord.Interaction, error):
-	if isinstance(error, app_commands.errors.CheckFailure):
-		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
-	else:
-		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
+# @dev_uni_test.error
+# async def dev_uni_test_error(interaction: discord.Interaction, error):
+# 	if isinstance(error, app_commands.errors.CheckFailure):
+# 		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
+# 	else:
+# 		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
 
-@dev_uni_give_permissions.error
-async def dev_uni_give_permissions_error(interaction: discord.Interaction, error):
-	if isinstance(error, app_commands.errors.CheckFailure):
-		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
-	else:
-		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
+# @dev_uni_give_permissions.error
+# async def dev_uni_give_permissions_error(interaction: discord.Interaction, error):
+# 	if isinstance(error, app_commands.errors.CheckFailure):
+# 		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
+# 	else:
+# 		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
 
 # @dev_send_to_channel.error
 # async def dev_send_to_channel_error(interaction: discord.Interaction, error):
@@ -1558,16 +1969,18 @@ async def dev_uni_give_permissions_error(interaction: discord.Interaction, error
 
 @uni_settings.error
 async def uni_settings_error(interaction: discord.Interaction, error):
+	#print(error)
 	if isinstance(error, app_commands.errors.CheckFailure):
 		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
 	else:
 		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
 
-@uni_fix_message.error
-async def uni_fix_message_error(interaction: discord.Interaction, error):
-	if isinstance(error, app_commands.errors.CheckFailure):
-		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
-	else:
-		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
+# @uni_fix_message.error
+# async def uni_fix_message_error(interaction: discord.Interaction, error):
+# 	print(error)
+# 	if isinstance(error, app_commands.errors.CheckFailure):
+# 		await interaction.response.send_message(f'{interaction.user.mention} {language[LANG]["dont_have_permissions"]}', ephemeral=True)
+# 	else:
+# 		await interaction.response.send_message(f'{language[LANG]["something_went_wrong"]}', ephemeral=True)
 
-bot.run(os.environ['TOKEN'])
+bot.run(token = os.environ['TOKEN'])
