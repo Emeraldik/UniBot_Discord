@@ -1,6 +1,5 @@
 import discord
-from discord.ext import commands
-from discord.ext import tasks
+from discord.ext import commands, tasks
 from discord import app_commands
 
 from dotenv import load_dotenv, find_dotenv
@@ -9,7 +8,6 @@ from pytz import timezone
 
 import os
 import json
-import asyncio
 from deepdiff import DeepDiff
 
 import backup
@@ -93,27 +91,27 @@ async def on_ready():
 		with open(files['channels'], 'r', encoding='utf-8') as file:
 			channels = json.load(file)
 
+		if not str(guild.id) in channels:
+			channels[str(guild.id)] = {
+				'admin_settings' : {
+					'roles' : [],
+					'users' : []
+				}
+			}	
+			for parser in thumbnails.keys():
+				channels[str(guild.id)].update({parser : {}})
+				channels[str(guild.id)][parser].update({
+					'channel': str(0),
+					'anounce_publish' : str(False),
+					'status': str(False),
+					'role': str(0),
+					'message_after': str(None),
+					'games': {},
+				})
+
+			logger.debug(f'Bot joined to new guild in offline : {guild.name}')
+
 		with open(files['channels'], 'w', encoding='utf-8') as file:
-			if not str(guild.id) in channels:
-				channels[str(guild.id)] = {
-					'admin_settings' : {
-						'roles' : [],
-						'users' : []
-					}
-				}	
-				for parser in thumbnails.keys():
-					channels[str(guild.id)].update({parser : {}})
-					channels[str(guild.id)][parser].update({
-						'channel': str(0),
-						'anounce_publish' : str(False),
-						'status': str(False),
-						'role': str(0),
-						'message_after': str(None),
-						'games': {},
-					})
-
-				logger.debug(f'Bot joined to new guild in offline : {guild.name}')
-
 			json.dump(channels, file, ensure_ascii=False, indent=4)	
 
 	logger.debug('Database loaded!')
@@ -134,28 +132,28 @@ async def on_guild_join(guild):
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
 
-	with open(files['channels'], 'w', encoding='utf-8') as file:
-		if not str(guild.id) in channels:
-			channels[str(guild.id)] = {
-				'admin_settings' : {
-					'roles' : [],
-					'users' : []
-				}
+	if not str(guild.id) in channels:
+		channels[str(guild.id)] = {
+			'admin_settings' : {
+				'roles' : [],
+				'users' : []
 			}
-			for parser in thumbnails.keys():
-				channels[str(guild.id)].update({parser : {}})
-				channels[str(guild.id)][parser].update({
-					'channel': str(0),
-					'anounce_publish' : str(False),
-					'status': str(False),
-					'role': str(0),
-					'message_after': str(None),
-					'games': {},
-				})
+		}
+		for parser in thumbnails.keys():
+			channels[str(guild.id)].update({parser : {}})
+			channels[str(guild.id)][parser].update({
+				'channel': str(0),
+				'anounce_publish' : str(False),
+				'status': str(False),
+				'role': str(0),
+				'message_after': str(None),
+				'games': {},
+			})
 
+	with open(files['channels'], 'w', encoding='utf-8') as file:
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 
-	data_members = {}
+	#data_members = {}
 
 	# with open(files['users'], 'r', encoding='utf-8') as file:
 	# 	data = json.load(file)
@@ -175,8 +173,9 @@ async def on_guild_join(guild):
 
 	# 	json.dump(data, file, ensure_ascii=False, indent=4)
 
-	logger.debug(f'Bot joined to new guild : {guild.name}')
-
+	logger.debug(f'Bot joined to new guild : {guild.name}, users : {len(guild.members)}')
+	logger.debug(f'Now bot has a {len(bot.users)} users')
+	
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
 		name = f'{len(bot.guilds)} {language[LANG]["precense_servers"][str(len(bot.guilds) % 10)]} ({len(bot.users)} {language[LANG]["precense_users"]})',
@@ -187,15 +186,16 @@ async def on_guild_remove(guild):
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
 
-	with open(files['channels'], 'w', encoding='utf-8') as file:
-		for parser in thumbnails.keys():
-			channels[str(guild.id)][parser].update({
-				'status' : str(False),
-			})
+	for parser in thumbnails.keys():
+		channels[str(guild.id)][parser].update({
+			'status' : str(False),
+		})
 
+	with open(files['channels'], 'w', encoding='utf-8') as file:
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 	
-	logger.debug(f'Bot leave/kicked from guild : {guild.name}')
+	logger.debug(f'Bot leave/kicked from guild : {guild.name}, users : {len(guild.members)}')
+	logger.debug(f'Now bot has a {len(bot.users)} users')
 
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
@@ -218,7 +218,7 @@ async def on_member_join(member):
 
 	# 	json.dump(data, file, ensure_ascii=False, indent=4)
 
-	logger.debug(f'New member : {member.name} in guild : {member.guild.name}')
+	logger.debug(f'Member joined : {member.name} | in guild : {member.guild.name} | Bot Users : {len(bot.users)}')
 
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
@@ -227,7 +227,7 @@ async def on_member_join(member):
 
 @bot.event
 async def on_member_remove(member):
-	logger.debug(f'Member leave : {member.name} in guild : {member.guild.name}')
+	logger.debug(f'Member leaved : {member.name} | from guild : {member.guild.name} | Bot Users : {len(bot.users)}')
 
 	await bot.change_presence(activity = discord.Activity(
 		type = discord.ActivityType.watching,
@@ -296,7 +296,7 @@ async def bot_loop_edit_message():
 											embed.title = new_dict['title']
 											embed.timestamp = date_end
 											embed.clear_fields()
-											embed.add_field(name = f'{language[LANG]["game_price"]} ({new_dict["price"]})', value = new_dict['description'], inline = False)
+											embed.add_field(name = f'{language[LANG]["game_price"]} ~~({new_dict["price"]})~~ {language[LANG]["price_free"]}', value = new_dict['description'], inline = False)
 
 											label = f'{language[LANG]["not_ru_akk"]}' if new_dict['region'] == 'not_ru' else ''
 
@@ -321,61 +321,61 @@ async def bot_loop_edit_message():
 
 											game['game_info'].update(new_dict)
 											logger.debug(f'{new_dict["title"]} was edited')
-						elif parser == 'steam':
-							for locate, data in file_games.items():
-								if key in data:
-									new_dict = {
-										'title' : data[key]['card_name'],
-										'description' : data[key]['card_desc'],
-										'url' : data[key]['card_link'],
-										'date_start' : data[key]['start_time'],
-									}
-									diff = DeepDiff(game['game_info'], new_dict).affected_root_keys
-									if len(diff) != 0:
-										print(new_dict)
-										channel = bot.get_channel(int(game['channel_id']))
-										try:
-											message = await channel.fetch_message(game['message_id'])
-										except Exception as e:
-											pass
-										else:
-											utc = timezone('UTC')
-											date_start = dt.strptime(new_dict['date_start'], "%Y-%m-%d %H:%M:%S")
-											date_start = utc.localize(date_start)
+						# elif parser == 'steam':
+						# 	for locate, data in file_games.items():
+						# 		if key in data:
+						# 			new_dict = {
+						# 				'title' : data[key]['card_name'],
+						# 				'description' : data[key]['card_desc'],
+						# 				'url' : data[key]['card_link'],
+						# 				'date_start' : data[key]['start_time'],
+						# 			}
+						# 			diff = DeepDiff(game['game_info'], new_dict).affected_root_keys
+						# 			if len(diff) != 0:
+						# 				print(new_dict)
+						# 				channel = bot.get_channel(int(game['channel_id']))
+						# 				try:
+						# 					message = await channel.fetch_message(game['message_id'])
+						# 				except Exception as e:
+						# 					pass
+						# 				else:
+						# 					utc = timezone('UTC')
+						# 					date_start = dt.strptime(new_dict['date_start'], "%Y-%m-%d %H:%M:%S")
+						# 					date_start = utc.localize(date_start)
 
-											embed = message.embeds[0]
-											embed.title = new_dict['title']
-											embed.timestamp = date_start
-											embed.clear_fields()
-											embed.add_field(name = '', value = new_dict['description'], inline = False)
+						# 					embed = message.embeds[0]
+						# 					embed.title = new_dict['title']
+						# 					embed.timestamp = date_start
+						# 					embed.clear_fields()
+						# 					embed.add_field(name = '', value = new_dict['description'], inline = False)
 
-											if channel.is_news() and game['anounce_publish'] == 'True':
-												embed.url = new_dict['url']
-												button = None
-											else:
-												button = discord.ui.View()
-												button.add_item(discord.ui.Button(
-													label = f'{language[LANG]["game_link"]}',
-													style = discord.ButtonStyle.success,
-													url = new_dict['url'],
-													emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
-													disabled = False,
-												))
+						# 					if channel.is_news() and game['anounce_publish'] == 'True':
+						# 						embed.url = new_dict['url']
+						# 						button = None
+						# 					else:
+						# 						button = discord.ui.View()
+						# 						button.add_item(discord.ui.Button(
+						# 							label = f'{language[LANG]["game_link"]}',
+						# 							style = discord.ButtonStyle.success,
+						# 							url = new_dict['url'],
+						# 							emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
+						# 							disabled = False,
+						# 						))
 											
-											await message.edit( 
-												embed = embed, 
-												view = button,
-											)
+						# 					await message.edit( 
+						# 						embed = embed, 
+						# 						view = button,
+						# 					)
 
-											game['game_info'].update(new_dict)
-											logger.debug(f'{new_dict["title"]} was edited')
+						# 					game['game_info'].update(new_dict)
+						# 					logger.debug(f'{new_dict["title"]} was edited')
 
 	with open(files['channels'], 'w', encoding='utf-8') as file:
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 
 	#logger.debug(f'Message was editied')
 								
-@tasks.loop(minutes=10.0, reconnect=True)
+@tasks.loop(minutes=1.0, reconnect=True)
 async def bot_loop_delete_message():
 	with open(files['channels'], 'r', encoding='utf-8') as file:
 		channels = json.load(file)
@@ -390,16 +390,18 @@ async def bot_loop_delete_message():
 			if len(file_guild['games']) != 0:
 				for key, game in file_guild['games'].items():
 					if game['expired_check'] != 'True':
-						if parser == 'epic_games':
-							timenow = dt.utcnow()
-							date_end = dt.strptime(game['game_info']['date_end'], "%Y-%m-%d %H:%M:%S")
-							expired = True if date_end < timenow else False
-						elif parser == 'steam':
-							expired = False
-							if key in file_games['steam_links']:
-								expired = True if file_games['steam_links'][key]['card_expired'] == 'True' else False
+						#if parser == 'epic_games':
+						timenow = dt.utcnow()
+						date_end = dt.strptime(game['game_info']['date_end'], "%Y-%m-%d %H:%M:%S")
+						# try:
+						# except:
+						# 	continue
+						# # elif parser == 'steam':
+						# 	expired = False
+						# 	if key in file_games['steam_links']:
+						# 		expired = True if file_games['steam_links'][key]['card_expired'] == 'True' else False
 						
-						if expired:
+						if date_end < timenow:
 							channel = bot.get_channel(int(game['channel_id']))
 							try:
 								message = await channel.fetch_message(game['message_id'])
@@ -415,8 +417,8 @@ async def bot_loop_delete_message():
 									embed.colour = discord.Color.red()
 									embed.set_footer(text = f'{language[LANG]["discount_ended"]}')
 									
-									if parser == 'steam':
-										embed.timestamp = dt.now(timezone('UTC')) 
+									# if parser == 'steam':
+									# 	embed.timestamp = dt.now(timezone('UTC')) 
 
 									label = ''
 									if parser == 'epic_games':
@@ -434,11 +436,16 @@ async def bot_loop_delete_message():
 											emoji = '<:69ca01c5525a96fd2fd6f42ff505874b:814609179352236042>',
 											disabled = True,
 										))
-
-									await message.edit(
-										embed = embed,
-										view = button,
-									)
+									while True:
+										try:
+											await message.edit(
+												embed = embed,
+												view = button,
+											)
+										except HTTPException:
+											asyncio.sleep(5)
+										else:
+											break
 							finally:
 								logger.info(f'Delete_MSG {parser} || Game : {game["game_info"]["title"]} || Guild : {guild.name}')
 								
@@ -449,7 +456,7 @@ async def bot_loop_delete_message():
 	with open(files['channels'], 'w', encoding='utf-8') as file:
 		json.dump(channels, file, ensure_ascii=False, indent=4)
 						
-@tasks.loop(minutes=5.0, reconnect=True)
+@tasks.loop(minutes=2.0, reconnect=True)
 async def bot_loop_send_message():
 	await epic_informer.start_parse()
 	await steam_informer.start_parse()
@@ -483,7 +490,7 @@ async def bot_loop_send_message():
 									embed.title = game['title']
 									embed.colour = discord.Color.green()
 									embed.timestamp = date_end
-									embed.add_field(name = f'{language[LANG]["game_price"]} ({game["price"]})', value = game['description'], inline = False)
+									embed.add_field(name = f'{language[LANG]["game_price"]} ~~({game["price"]})~~ {language[LANG]["price_free"]}', value = game['description'], inline = False)
 									embed.set_image(url=game['image'])
 									embed.set_thumbnail(url=thumbnails[parser])
 									embed.set_footer(text = f'{language[LANG]["discount_will_ended"]}')
@@ -512,13 +519,20 @@ async def bot_loop_send_message():
 									if guild.get_role(int(file_guild['role'])) != None:
 										content = guild.get_role(int(file_guild['role'])).mention
 
-									message = await channel.send(
-										content = content, 
-										embed = embed, 
-										allowed_mentions = discord.AllowedMentions.all(), 
-										view = button,
-									)
 
+									while True:
+										try:
+											message = await channel.send(
+												content = content, 
+												embed = embed, 
+												allowed_mentions = discord.AllowedMentions.all(), 
+												view = button,
+											)
+										except HTTPException:
+											asyncio.sleep(10)
+										else:
+											break
+									
 									if published:
 										await message.publish()
 										
@@ -544,21 +558,21 @@ async def bot_loop_send_message():
 
 									file_guild['games'].update(games_channel)
 
-									logger.info(f'Send_MSG {parser} || Game : {game["title"]} was posted in {guild.name}')
+									logger.info(f'Send_MSG {parser} || Game : {game["title"]} : was posted in {guild.name}')
 							elif parser == 'steam':
-								if game['card_expired'] == 'False':
+								if game['expired'] == 'False':
 									utc = timezone('UTC')
-									date_start = dt.strptime(game['start_time'], "%Y-%m-%d %H:%M:%S")
+									date_start = dt.strptime(game['end_time'], "%Y-%m-%d %H:%M:%S")
 									date_start = utc.localize(date_start)
 
 									embed = discord.Embed()
 									embed.title = game['card_name']
 									embed.colour = discord.Color.green()
 									embed.timestamp = date_start
-									embed.add_field(name = '', value = game['card_desc'], inline = False)
+									embed.add_field(name = f'{language[LANG]["game_price"]} ~~({game["card_price"]})~~ {language[LANG]["price_free"]}', value = f'{language[LANG]["it_is_promotion"]}', inline = False)
 									embed.set_image(url=game['card_image'])
 									embed.set_thumbnail(url=thumbnails[parser])
-									embed.set_footer(text = f'{language[LANG]["discount_started"]}')
+									embed.set_footer(text = f'{language[LANG]["discount_will_ended"]}')
 									
 									if channel.is_news() and file_guild['anounce_publish'] == 'True':
 										embed.url = game['card_link']
@@ -593,9 +607,9 @@ async def bot_loop_send_message():
 
 									game_json = {
 					                    'title': str(game['card_name']),
-					                    'description': str(game['card_desc']),
+					                    #'description': str(game['card_desc']),
 					                    'url': str(game['card_link']),
-					                    'date_start' : str(game['start_time']),
+					                    'date_end' : str(game['end_time']),
 									}
 
 									games_channel = {
@@ -611,7 +625,7 @@ async def bot_loop_send_message():
 
 									file_guild['games'].update(games_channel)
 
-									logger.info(f'Send_MSG {parser} || Game : {game["card_name"]} was posted in {guild.name}')
+									logger.info(f'Send_MSG {parser} || Game : {game["card_name"]} : was posted in {guild.name}')
 							
 	with open(files['channels'], 'w', encoding='utf-8') as file:
 		json.dump(channels, file, ensure_ascii=False, indent=4)
@@ -783,7 +797,7 @@ class _SubmitModal(discord.ui.Modal, title = language[LANG]["reset_submit_modal"
 			 	view = self.view
 			)
 
-			logger.warning(f'Reset was discarded in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id})')
+			logger.warning(f'Reset for {self.parser} was discarded in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id})')
 			return
 
 		with open(files['channels'], 'r', encoding='utf-8') as file:
@@ -809,7 +823,7 @@ class _SubmitModal(discord.ui.Modal, title = language[LANG]["reset_submit_modal"
 		 	view = self.view
 		)
 
-		logger.info(f'Reset was successfuled in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id})')
+		logger.info(f'Reset for {self.parser} was successfuled in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id})')
 
 class _ResetMenu(discord.ui.View):
 	@discord.ui.button(
@@ -865,7 +879,7 @@ class _StatusAnnounceButton(discord.ui.Button):
 		self.style = style = discord.ButtonStyle.success if channels[str(self.interaction.guild_id)][self.parser]['anounce_publish'] == 'False' else discord.ButtonStyle.danger
 		self.menu.add_item(self)
 
-		logger.info(f'Bot publish message setting was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({channels[str(interaction.guild_id)][self.parser]["anounce_publish"] == "False"} -> {channels[str(interaction.guild_id)][self.parser]["anounce_publish"] == "True"})')
+		logger.info(f'Bot publish message setting for {self.parser} was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({channels[str(interaction.guild_id)][self.parser]["anounce_publish"] == "False"} -> {channels[str(interaction.guild_id)][self.parser]["anounce_publish"] == "True"})')
 
 		await interaction.response.edit_message(view = self.menu)
 
@@ -924,7 +938,7 @@ class _ChannelSettingsMenu(discord.ui.View):
 
 				json.dump(channels, file, ensure_ascii=False, indent=4)
 
-			logger.info(f'Channel was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({last_channel_name} -> {channel_new_name})')
+			logger.info(f'Channel was changed for {self.parser} in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({last_channel_name} -> {channel_new_name})')
 			#embed = await self.update_embed(interaction, last_channel_name)
 			#await interaction.response.edit_message(embed = embed, view = self)
 			await self.update_message(interaction, last_channel_name)
@@ -942,7 +956,7 @@ class _ChannelSettingsMenu(discord.ui.View):
 				})
 
 				json.dump(channels, file, ensure_ascii=False, indent=4)
-			logger.info(f'Bot publish message setting was |automaticaly| changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({channels[str(interaction.guild_id)][self.parser]["anounce_publish"] == "False"} -> False')
+			logger.info(f'Bot publish message setting for {self.parser} was |automaticaly| changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({channels[str(interaction.guild_id)][self.parser]["anounce_publish"] == "False"} -> False')
 		embed = await self.update_embed(interaction, last_channel_par)
 		await interaction.response.edit_message(embed = embed, view = self)
 
@@ -998,7 +1012,7 @@ class _RoleSettingsMenu(discord.ui.View):
 
 				json.dump(channels, file, ensure_ascii=False, indent=4)
 
-			logger.info(f'Role was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({last_role_name} -> {role_new_name})')
+			logger.info(f'Role for {self.parser} was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({last_role_name} -> {role_new_name})')
 			embed = await self.update_embed(interaction, last_role_name)
 			await interaction.response.edit_message(embed = embed, view = self)
 	
@@ -1047,7 +1061,7 @@ class _MessageAfterSettingsMenu(discord.ui.View):
 			embed.add_field(name = f'{language[LANG]["current_message_for"]} {interaction.guild.name} {language[LANG]["channel"]}', value = message_after_name_new, inline = False)
 			embed.add_field(name = f'{language[LANG]["last_message"]}', value = self.last_mode, inline = False)
 			
-			logger.info(f'MessageAfter was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({self.last_mode} -> {message_after_name_new})')
+			logger.info(f'MessageAfter for {self.parser} was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({self.last_mode} -> {message_after_name_new})')
 			
 			self.last_mode = message_after_name_new
 			with open(files['channels'], 'w', encoding='utf-8') as file:
@@ -1193,7 +1207,7 @@ class _StatusSettingsButton(discord.ui.Button):
 		self.style = style = discord.ButtonStyle.success if channels[str(self.interaction.guild_id)][self.parser]['status'] == 'False' else discord.ButtonStyle.danger
 		self.menu.add_item(self)
 
-		logger.info(f'Bot status was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({channels[str(interaction.guild_id)][self.parser]["status"] == "False"} -> {channels[str(interaction.guild_id)][self.parser]["status"] == "True"})')
+		logger.info(f'Bot status for {self.parser} was changed in {interaction.guild.name} by {interaction.user.name} ({interaction.user.id}) ({channels[str(interaction.guild_id)][self.parser]["status"] == "False"} -> {channels[str(interaction.guild_id)][self.parser]["status"] == "True"})')
 
 		await interaction.response.edit_message(content = '', embed = await embedSettignsMenu(interaction, self.parser), view = self.menu)
 
@@ -1308,10 +1322,10 @@ class _ChangeMessageModal(discord.ui.Modal):
 		
 		label = ''
 		if self.parser == 'epic_games':
-			self.embed.set_field_at(0, name = f'{language[LANG]["game_price"]} ({options["price"]})', value = options['description'], inline = False)
+			self.embed.set_field_at(0, name = f'{language[LANG]["game_price"]} ~~({options["price"]})~~ {language[LANG]["price_free"]}', value = options['description'], inline = False)
 			label = f'{language[LANG]["not_ru_akk"]}' if options['region'] == 'not_ru' else ''
 		elif self.parser == 'steam':
-			self.embed.set_field_at(0, name = '', value = options['description'], inline = False)
+			#self.embed.set_field_at(0, name = '', value = options['description'], inline = False)
 			self.embed.title = options['title']
 
 		with open(files['channels'], 'r', encoding='utf-8') as file:
@@ -1502,7 +1516,7 @@ class _FixMessageButtons(discord.ui.Button):
 		                },
 						'steam': {
 							'title': language[LANG]["fix_message_modal_title"],
-		                    'description': language[LANG]["fix_message_modal_description"],
+		                    #'description': language[LANG]["fix_message_modal_description"],
 		                    'url': language[LANG]["fix_message_modal_url"],
 		                },
 					}
@@ -1707,6 +1721,13 @@ async def uni_help(interaction: discord.Interaction):
 @bot.tree.command(name='uni_ping')
 async def uni_ping(interaction: discord.Interaction):
 	await interaction.response.send_message(content = f'{language[LANG]["bot_latency"]} : {bot.latency:.3f}s', ephemeral = True)
+
+# @bot.tree.command(name='uni_test')
+# async def uni_test(interaction: discord.Interaction):
+# 	print(interaction.guild.get_member(interaction.user.id).activities)
+# 	await interaction.response.send_message('Ready')
+# 	#await interaction.response.send_message(content = f'{interaction.user.raw_status}', ephemeral = True)
+
 
 # @bot.tree.command(name='dev_send_to_channel')
 # @app_commands.guild_only()

@@ -140,7 +140,10 @@ language['en'] = {
 	'return_to_main' : 'Return to main menu',
 	'fix_message_button' : 'Fix message',
 	'in_develop' : 'In development',
-	'command_in_develop' : 'This command is in development'
+	'command_in_develop' : 'This command is in development',
+	'price_free' : 'For free',
+	'it_is_promotion' : 'Hurry up to pick up',
+	'price_unavailable' : 'Price unavailable'
 }
 
 language['ru'] = {
@@ -194,7 +197,7 @@ language['ru'] = {
 	'role_not_exists' : 'Ошибка : такой роли больше не существует',
 	'last_role' : 'Первоначальная роль',
 	'delete_message' : 'Удалить сообщение',
-	'edit_message' : 'Исправить сообщение',
+	'edit_message' : 'Изменить сообщение',
 	'none_message' : 'Ничего не делать с сообщением',
 	'choose_message' : 'Выберите режим',
 	'settings_message' : 'Настройки режима, что произойдёт с сообщением, после окончания акции',
@@ -281,5 +284,8 @@ language['ru'] = {
 	'return_to_main' : 'Вернуться к основному меню',
 	'fix_message_button' : 'Исправить сообщение',
 	'in_develop' : 'В разработке',
-	'command_in_develop' : 'Данная команда находиться в разработке'
+	'command_in_develop' : 'Данная команда находиться в разработке',
+	'price_free' : 'Бесплатно',
+	'it_is_promotion' : 'Успейте забрать',
+	'price_unavailable' : 'Цена недоступна'
 }

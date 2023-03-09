@@ -1,111 +1,124 @@
-import aiohttp, asyncio
+import asyncio, aiohttp
 from bs4 import BeautifulSoup as BS
-from fake_useragent import UserAgent
-from deep_translator import GoogleTranslator
+
 from datetime import datetime as dt
+from pytz import timezone
+
 import json, os
 
-from language import LANG
 from log_main import logger
-
-translator = GoogleTranslator(source='auto', target=LANG)
+from language import language, LANG
 
 file_name = 'steam.json'
 
-async def get_card_info(session, i, all_data, card, k):
-	try:
-		card_id = card.get('id').split('-')[-1]
-		if card.find('div', class_='expire_stamp'):
-			if str(card_id) in all_data:
-				if all_data[str(card_id)]['card_expired'] != 'True':
-					all_data[str(card_id)]['card_expired'] = str(True)
-					logger.info(f'{card_id} was expired')
-			return
-		card_fulldata = card.find('div', class_='post-thumbnail')
-		card_data = card_fulldata.find('a')
-		card_image = card_fulldata.find('img').get('src')
-		card_name = card_data.get('title')
-		card_time = dt.strptime(card.find('time', class_='entry-date published').get('datetime'), "%Y-%m-%dT%H:%M:%S+00:00")
-		card_link = card_data.get('href')
-		
-		inner_card_link = 'Not_inner : ' + str(card_link)
-		inner_desc = ''
-		#inner_steam_link = ''
-		
-		headers = {'User-Agent': f'{UserAgent().chrome}'}
-		async with session.get(url = card_link, headers=headers) as inner_response:
-			inner_response_content = await inner_response.text()
-			inner_soup = BS(inner_response_content, 'lxml')
-			inner_desc_plate = inner_soup.find('div', class_='zf_description')
-			inner_desc = '\n'.join([i.text for i in inner_desc_plate.find_all('p')])
-			inner_card_link = inner_soup.find('a', class_='item-url').get('onclick').strip('javascript:window.open( ); \'')
-			#inner_steam_link = inner_soup.find('a', class_='zf-edit-button').get('href')
+async def get_cards(session, all_data):
+    cookies = {
+        'cf_chl_2': '483ead1c46bc2ba',
+        'cf_clearance': 'NTtHkvLcAf85VlNygUzCwVSF5KiS96P_8mL0x5krOc4-1677783538-0-250',
+        '__cf_bm': 'dcd21SOPCxCMZCU1pf8EjFbKxK5tK8k7BEf8IGN4vLo-1677783554-0-AeYOskU4rArXynZlpfzgMDsIbKGDikHgT/h9gMSSLDvHKl6LxZrFScsl9TeswU1KNbZREVB0O7wChI6l9wQD5UEaR8AZORi15KsCf5IU4SAjXvPjPWumt+RdqEf1EAOa0LcIeGqkXV2ISpcEeTZbrghhle5EYFig9cZLtjkJvIGZE8VIs87tiPtTNTZzCbG05A==',
+    }
 
-		if not 'https://store.steampowered.com/' in inner_card_link:
-			return
-	except Exception as e:
-		return
-	else:
-		all_data[str(card_id)] = {
-			'card_name' : str(card_name),
-			'card_desc' : translator.translate(str(inner_desc)),
-			'card_image' : str(card_image),
-			'start_time' : str(card_time),
-			'card_link' : str(inner_card_link),
-			'card_expired' : str(False),
-			#'steam_link' : str(inner_steam_link),
-		}
-		
-		logger.info(f'[+] {card_name} card async')
+    headers = {
+        'authority': 'steamdb.info',
+        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'accept-language': 'ru,en-US;q=0.9,en;q=0.8,ru-RU;q=0.7',
+        'cache-control': 'no-cache',
+        'pragma': 'no-cache',
+        'referer': 'https://steamdb.info/tokendumper/',
+        'sec-ch-ua': '"Chromium";v="110", "Not A(Brand";v="24", "Google Chrome";v="110"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-fetch-dest': 'document',
+        'sec-fetch-mode': 'navigate',
+        'sec-fetch-site': 'same-origin',
+        'sec-fetch-user': '?1',
+        'sec-gpc': '1',
+        'upgrade-insecure-requests': '1',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
+    }
 
+    url = 'https://steamdb.info/upcoming/free/'
 
-async def get_cards(session, i, all_data):
-	headers = {'User-Agent': f'{UserAgent().chrome}'}
+    async with session.get(url=url, headers = headers, cookies=cookies) as response:
+        response_content = await response.text()
+        soup = BS(response_content, 'lxml')
 
-	url = f'https://www.freesteamkeys.com/giveaways/page/{i}/'
+        for k, game in enumerate(soup.find_all('tr', class_='app')):
+            try:
+                game_id = game.get('data-appid')
+                if game_id in all_data:
+                    continue
 
-	async with session.get(url=url, headers = headers) as response:
-		response_content = await response.text()
-		soup = BS(response_content, 'lxml')
-		giveaways = soup.find('div', id='post-items')
+                if game.get('data-subid') == '61':
+                    continue
 
-		all_cards = giveaways.find_all('article', class_='post')
+                if not game.find('td', class_='price-discount'):
+                    continue 
+                
 
-		cards = []
-		for k, card in enumerate(all_cards):
-			try:
-				task = asyncio.create_task(get_card_info(session, i, all_data, card, k))
-				cards.append(task)
-			except Exception as e:
-				continue
+                applogo = game.find('td', class_='applogo').find('a')
+                game_link = applogo.get('href').strip('?curator_clanid=4777282&utm_source=SteamDB')
+                
+                async with session.get(url=game_link, headers = headers, cookies=cookies) as response:
+                    inner_response_content = await response.text()
+                    inner_soup = BS(inner_response_content, 'lxml')
 
-		await asyncio.gather(*cards)
+                    try:
+                        game_price = inner_soup.find('div', class_='discount_original_price').text
+                    except:
+                        game_price = language[LANG]['price_unavailable']
+
+                    game_logo = inner_soup.find('link', {'href' : True, 'rel': 'image_src'}).get('href')
+                game_title = game.find_all('td')[2].find('b').text
+
+                # convert from Moscow to UTC time
+                time_z = timezone('UTC')
+                utc_three = timezone('Europe/Moscow')
+                times = [time_z.normalize(utc_three.localize(dt.strptime(i.get('data-time'), "%Y-%m-%dT%H:%M:%S+00:00"))) for i in game.find_all('td', class_='timeago')]
+            except Exception as e:
+                print(e)
+            else:
+                all_data.update({
+                    game_id : {
+                        'card_name' : game_title,
+                        'card_link' : game_link,
+                        'card_image' : game_logo,
+                        'card_price' : game_price,
+                        'start_time' : str(dt.strptime(str(times[0]), "%Y-%m-%d %H:%M:%S+00:00")),
+                        'end_time' : str(dt.strptime(str(times[1]), "%Y-%m-%d %H:%M:%S+00:00")),
+                        'started' : str(times[0] < dt.now(timezone('UTC'))),
+                        'expired' : str(times[1] < dt.now(timezone('UTC')))
+                    }
+                })
 
 async def check_games(all_data):
-	async with aiohttp.ClientSession() as session:
-		tasks = []
-		for i in range(1, 3): # 2 pages
-			task = asyncio.create_task(get_cards(session, i, all_data))
-			tasks.append(task)
-
-		await asyncio.gather(*tasks)
+    async with aiohttp.ClientSession() as session:
+        await get_cards(session, all_data)
 
 async def start_parse():
-	if not os.path.exists(file_name):
-		with open(file_name, 'w', encoding='utf-8') as file:
-			file.write('{"steam_links" : {}, "not_steam_links" : {}}')
+    if not os.path.exists(file_name):
+        with open(file_name, 'w', encoding='utf-8') as file:
+            file.write('{"steam_links" : {}}')
 
-	with open(file_name, 'r', encoding = 'utf-8') as file:
-		async_all_data = json.load(file)
-	
-	try:
-		task = asyncio.get_event_loop().create_task(check_games(async_all_data['steam_links']))
-		await task
-	except Exception as e:
-		print(e)
-	else:
-		with open(file_name, 'w', encoding='utf-8') as file:
-			json.dump(async_all_data, file, ensure_ascii=False, indent=4)
+    with open(file_name, 'r', encoding = 'utf-8') as file:
+        async_all_data = json.load(file)
+    
+    try:
+        task = asyncio.get_event_loop().create_task(check_games(async_all_data['steam_links']))
+        await task
+    except Exception as e:
+        print(e)
+    else:
+        for k, game in async_all_data['steam_links'].items():
+            if game.get('expired') == 'False':
+                game['expired'] = str(dt.strptime(game['end_time'], "%Y-%m-%d %H:%M:%S") < dt.utcnow())
+
+        logger.info(f'[+] {[i.get("card_name") for i in async_all_data["steam_links"].values() if i.get("expired") == "False"]} card async')
+        with open(file_name, 'w', encoding='utf-8') as file:
+            json.dump(async_all_data, file, ensure_ascii=False, indent=4)
 
 if __name__ == '__main__':
-	asyncio.run(start_parse())
+    from time import perf_counter
+    start = perf_counter()
+    asyncio.run(start_parse())
+    print(f'Time : {(perf_counter() - start):.3f}s')

@@ -136,15 +136,15 @@ async def start_parse():
 		for k in async_all_data.keys():
 			async_all_data[k].update(new_all_data[k])
 		
-		with open(file_name, 'w', encoding='utf-8') as file:
-			for key, region in async_all_data.items():
-				for k, game in region.items():
-					timenow = dt.utcnow()
-					date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
-					async_all_data[key][k].update({
-						'expired' : str(date_end < timenow) if date_end != '' else None,
-					})
+		for key, region in async_all_data.items():
+			for k, game in region.items():
+				timenow = dt.utcnow()
+				date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
+				async_all_data[key][k].update({
+					'expired' : str(date_end < timenow) if date_end != '' else None,
+				})
 
+		with open(file_name, 'w', encoding='utf-8') as file:
 			json.dump(async_all_data, file, ensure_ascii=False, indent=4)
 
 if __name__ == '__main__':
