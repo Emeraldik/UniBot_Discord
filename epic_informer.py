@@ -1,9 +1,7 @@
 import aiohttp, asyncio
-from bs4 import BeautifulSoup as BS
 from fake_useragent import UserAgent
 from deep_translator import GoogleTranslator
 from datetime import datetime as dt
-from copy import deepcopy
 import json, os
 
 from language import LANG
@@ -47,12 +45,12 @@ async def get_data_from_api(session, key_region='ru', API='locale=ru-RU&country=
 					if k['type'] == 'OfferImageWide' or k['type'] == 'DieselStoreFrontWide':
 						game_image = k['url']
 				
-				game_url = ''
-
-				if len(game['offerMappings']) == 0:
+				if game['catalogNs']['mappings']:
 					game_url = game['catalogNs']['mappings'][0]['pageSlug']
-				else:
+				elif game['offerMappings']:
 					game_url = game['offerMappings'][0]['pageSlug']
+				else:
+					game_url = game['productSlug']
 
 				game_price = game['price']['totalPrice']['fmtPrice']['originalPrice']
 				game_promotions = game['promotions']['promotionalOffers']
@@ -76,8 +74,8 @@ async def get_data_from_api(session, key_region='ru', API='locale=ru-RU&country=
 					date_end = ''
 
 				timenow = dt.utcnow()
-			except Exception as e:
-				print(e)
+			except Exception:
+				continue
 			else:
 				new_dict[str(game['id'])] = {
 					'title' : str(game['title']),
@@ -92,7 +90,7 @@ async def get_data_from_api(session, key_region='ru', API='locale=ru-RU&country=
 				}
 
 				all_data[str(key_region)].update(new_dict)
-				logger.info(f'[+] {key_region} : {game["title"]} async')
+				#logger.info(f'[+] {key_region} : {game["title"]} async')
 
 async def check_games(all_data):
 	async with aiohttp.ClientSession() as session:
@@ -104,48 +102,48 @@ async def check_games(all_data):
 		await asyncio.gather(*tasks)
 
 async def start_parse():
-	if not os.path.exists(file_name):
-		with open(file_name, 'w', encoding='utf-8') as file:
-			file.write('{"ru" : {}, "not_ru" : {}}')
-	
-	new_all_data = {
-		'ru' : {},
-		'not_ru' : {}
-	}
+    if not os.path.exists(file_name):
+        with open(file_name, 'w', encoding='utf-8') as file:
+            file.write('{"ru" : {}, "not_ru" : {}}')
+        
+    new_all_data = {
+        'ru' : {},
+        'not_ru' : {}
+    }
 
-	try:
-		task = asyncio.get_event_loop().create_task(check_games(new_all_data))
-		await task
-	except Exception as e:
-		print(e)
-	else:
-		with open(file_name, 'r', encoding='utf-8') as file:
-			async_all_data = json.load(file)
-
-		for k, game in new_all_data['ru'].items():
-			if k in new_all_data['not_ru']:
-				new_all_data['not_ru'].pop(k)
-				
-			if k in async_all_data['not_ru']:
-				async_all_data['not_ru'].pop(k)
-
-		for k, game in new_all_data['not_ru'].items():
-			if not k in new_all_data['ru'] and k in async_all_data['ru']:
-				async_all_data['ru'].pop(k)
-
-		for k in async_all_data.keys():
-			async_all_data[k].update(new_all_data[k])
-		
-		for key, region in async_all_data.items():
-			for k, game in region.items():
-				timenow = dt.utcnow()
-				date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
-				async_all_data[key][k].update({
-					'expired' : str(date_end < timenow) if date_end != '' else None,
-				})
-
-		with open(file_name, 'w', encoding='utf-8') as file:
-			json.dump(async_all_data, file, ensure_ascii=False, indent=4)
-
+    try:
+        task = asyncio.get_event_loop().create_task(check_games(new_all_data))
+        await task
+    except Exception as e:
+        logger.error(e)
+    else:
+        with open(file_name, 'r', encoding='utf-8') as file:
+            async_all_data = json.load(file)
+    
+        for k, game in new_all_data['ru'].items():
+            if k in new_all_data['not_ru']:
+                new_all_data['not_ru'].pop(k)
+                
+            if k in async_all_data['not_ru']:
+                async_all_data['not_ru'].pop(k)
+    
+        for k, game in new_all_data['not_ru'].items():
+            if not k in new_all_data['ru'] and k in async_all_data['ru']:
+                async_all_data['ru'].pop(k)
+    
+        for k in async_all_data.keys():
+            async_all_data[k].update(new_all_data[k])
+        
+        for key, region in async_all_data.items():
+            for k, game in region.items():
+                timenow = dt.utcnow()
+                date_end = dt.strptime(game['date_end'], "%Y-%m-%d %H:%M:%S")
+                async_all_data[key][k].update({
+                    'expired' : str(date_end < timenow) if date_end != '' else None,
+                })
+        
+        with open(file_name, 'w', encoding='utf-8') as file:
+            json.dump(async_all_data, file, ensure_ascii=False, indent=4)
+        
 if __name__ == '__main__':
 	asyncio.run(start_parse())
